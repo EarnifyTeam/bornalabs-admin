@@ -4,18 +4,30 @@ export const envConfig = {
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
 };
 
-export function validateSupabaseConfig(): { isValid: boolean; missingKeys: string[] } {
+export interface EnvValidationResult {
+  isValid: boolean;
+  missingKeys: string[];
+  errorMessage?: string;
+}
+
+export function validateSupabaseConfig(): EnvValidationResult {
   const missingKeys: string[] = [];
 
-  if (!envConfig.supabaseUrl || envConfig.supabaseUrl.includes("placeholder")) {
+  if (!envConfig.supabaseUrl || envConfig.supabaseUrl.includes("your-project-id") || envConfig.supabaseUrl.includes("placeholder")) {
     missingKeys.push("NEXT_PUBLIC_SUPABASE_URL");
   }
-  if (!envConfig.supabaseAnonKey || envConfig.supabaseAnonKey.includes("placeholder")) {
+
+  if (!envConfig.supabaseAnonKey || envConfig.supabaseAnonKey.includes("your-supabase-anon-key") || envConfig.supabaseAnonKey.includes("placeholder")) {
     missingKeys.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
 
+  const isValid = missingKeys.length === 0;
+
   return {
-    isValid: missingKeys.length === 0,
+    isValid,
     missingKeys,
+    errorMessage: isValid
+      ? undefined
+      : `[Supabase Config Error] Missing or unconfigured environment variables: ${missingKeys.join(", ")}. Please configure them in your .env file.`,
   };
 }

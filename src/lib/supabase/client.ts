@@ -1,8 +1,8 @@
-import { createBrowserClient } from "@supabase/ssr";
+import { createBrowserSupabaseClient } from "./browser";
 
+// Unified entry point for client-side Supabase usage
 export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
-
-  return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  return createBrowserSupabaseClient();
 }
+
+export { createBrowserSupabaseClient };
