@@ -74,11 +74,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    if (!isConfigValid) {
-      setLoading(false);
-      return;
-    }
-
     // Get initial session
     const getInitialSession = async () => {
       try {
