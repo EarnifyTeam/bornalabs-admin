@@ -24,15 +24,17 @@ enum ProductCategory {
   AI_TOOL
   CHROME_EXTENSION
   DESKTOP_SOFTWARE
+  WEB_APPLICATION
   AUTOMATION
   API
   FUTURE_PRODUCT
 }
 
 enum ProductStatus {
-  LIVE
-  BETA
+  DRAFT
   COMING_SOON
+  BETA
+  LIVE
   DEPRECATED
 }
 
@@ -146,26 +148,35 @@ model AuditLog {
 }
 
 model Product {
-  id               String          @id @default(uuid())
-  name             String
-  slug             String          @unique
-  description      String
-  category         ProductCategory
-  price            Decimal         @db.Decimal(10, 2)
+  id                String          @id @default(uuid())
+  name              String
+  slug              String          @unique
+  shortDescription  String?
+  description       String
+  category          ProductCategory
+  productType       ProductCategory @default(DESKTOP_SOFTWARE)
+  version           String          @default("1.0.0")
+  price             Decimal         @db.Decimal(10, 2)
   isLicenseRequired Boolean         @default(true)
-  status           ProductStatus   @default(COMING_SOON)
-  downloadUrl      String?
-  documentationUrl String?
-  iconUrl          String?
-  bannerUrl        String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  screenshots      Screenshot[]
-  releases         Release[]
-  licenses         License[]
-  orderItems       OrderItem[]
-  subscriptions    Subscription[]
-  downloads        Download[]
+  status            ProductStatus   @default(COMING_SOON)
+  downloadUrl       String?
+  documentationUrl  String?
+  githubUrl         String?
+  websiteUrl        String?
+  iconUrl           String?
+  bannerUrl         String?
+  galleryImages     String[]        @default([])
+  featured          Boolean         @default(false)
+  createdBy         String?
+  deletedAt         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  screenshots       Screenshot[]
+  releases          Release[]
+  licenses          License[]
+  orderItems        OrderItem[]
+  subscriptions     Subscription[]
+  downloads         Download[]
 }
 
 model Screenshot {
@@ -184,7 +195,7 @@ model Release {
   isForceUpdate     Boolean         @default(false)
   fileUrl           String
   fileType          ReleaseFileType
-  supportedBrowsers String[]        // e.g. ["Chrome", "Edge"]
+  supportedBrowsers String[]
   createdAt         DateTime        @default(now())
   product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
   downloads         Download[]
@@ -217,7 +228,7 @@ model Device {
   browser        DeviceBrowser?
   browserVersion String?
   clientVersion  String?
-  hwFingerprint  String         @unique // Unique hardware signature
+  hwFingerprint  String         @unique
   lastActiveAt   DateTime       @default(now())
   createdAt      DateTime       @default(now())
   license        License        @relation(fields: [licenseId], references: [id], onDelete: Cascade)
@@ -251,7 +262,7 @@ model OrderItem {
 model Payment {
   id            String   @id @default(uuid())
   orderId       String
-  gateway       String   // "Stripe" or "PayPal"
+  gateway       String
   txId          String   @unique
   amount        Decimal  @db.Decimal(10, 2)
   status        String
@@ -285,7 +296,7 @@ model Invoice {
 model Coupon {
   id            String    @id @default(uuid())
   code          String    @unique
-  discountType  String    // "PERCENT" or "FIXED"
+  discountType  String
   discountValue Decimal   @db.Decimal(10, 2)
   maxUses       Int       @default(100)
   usesCount     Int       @default(0)
@@ -329,8 +340,8 @@ model SupportTicket {
   id              String           @id @default(uuid())
   userId          String
   subject         String
-  status          String           @default("OPEN") // e.g. OPEN, IN_PROGRESS, RESOLVED, CLOSED
-  priority        String           @default("MEDIUM") // e.g. LOW, MEDIUM, HIGH
+  status          String           @default("OPEN")
+  priority        String           @default("MEDIUM")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
