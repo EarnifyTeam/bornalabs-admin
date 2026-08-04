@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         licenseId: verificationResult.license?.id,
         productId: verificationResult.license?.productId,
         type: verificationResult.license?.type,
-        expiryDate: verificationResult.license?.expiryDate,
+        expiresAt: verificationResult.license?.expiresAt,
         deviceRegistered: verificationResult.device?.id,
         timestamp: new Date().toISOString(),
       },

@@ -1,74 +1,127 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { LicenseService } from "@/services/license.service";
 import { LicenseType } from "@prisma/client";
 
+function generateRandomHex(length: number): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+function getPrefixForProduct(productName: string, productCategory?: string): string {
+  const nameUpper = productName.toUpperCase();
+  if (nameUpper.includes("PROMPTX")) return "BL-PX";
+  if (productCategory === "CHROME_EXTENSION" || nameUpper.includes("EXTENSION")) return "BL-EXT";
+  if (productCategory === "DESKTOP_SOFTWARE" || nameUpper.includes("DESKTOP")) return "BL-DESKTOP";
+  if (productCategory === "AI_TOOL" || nameUpper.includes("AI")) return "BL-AI";
+  if (productCategory === "WEB_APPLICATION") return "BL-WEB";
+  if (productCategory === "AUTOMATION") return "BL-AUTO";
+  if (productCategory === "API") return "BL-API";
+
+  const code = productName.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "X");
+  return `BL-${code}`;
+}
+
+function formatLicenseKey(prefix: string): string {
+  const part1 = generateRandomHex(4);
+  const part2 = generateRandomHex(4);
+  const part3 = generateRandomHex(4);
+  return `${prefix}-${part1}-${part2}-${part3}`;
+}
+
 /**
- * POST: Bulk generate N license keys in batch
+ * POST: Bulk batch license generator (creates up to 100 license keys in a transaction)
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { count, email, productId, type, prefix, deviceLimit, durationDays } = body;
+    const { productId, quantity, type, deviceLimit, expiryDays } = body;
 
-    const qty = Math.min(Math.max(parseInt(count || "1"), 1), 100);
+    const qty = Math.min(Math.max(parseInt(quantity || "1", 10), 1), 100);
 
-    if (!productId || !type) {
+    if (!productId) {
       return NextResponse.json(
-        { error: "PRODUCT_ID_AND_TYPE_REQUIRED" },
+        { error: "PRODUCT_ID_REQUIRED", message: "Target Product is required." },
         { status: 400 }
       );
     }
 
-    // Resolve or find default user
-    let user = email
-      ? await prisma.user.findUnique({ where: { email } })
-      : await prisma.user.findFirst();
-
-    if (!user) {
-      // Create system default admin user if none exists
-      user = await prisma.user.create({
-        data: {
-          email: email || "admin@bornalabs.com",
-          passwordHash: "$2a$10$placeholderhash",
-          role: "SUPER_ADMIN",
-          status: "ACTIVE",
-          profile: {
-            create: {
-              fullName: "Admin License Holder",
-            },
-          },
-        },
-      });
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) {
+      return NextResponse.json({ error: "PRODUCT_NOT_FOUND" }, { status: 404 });
     }
 
-    const generatedLicenses = [];
+    // Default admin user assignment for batch keys
+    const adminUser = await prisma.user.findFirst();
+    if (!adminUser) {
+      return NextResponse.json({ error: "USER_REQUIRED" }, { status: 400 });
+    }
+
+    const prefix = getPrefixForProduct(product.name, product.category);
+
+    let expiresAt: Date | null = null;
+    if (expiryDays && parseInt(expiryDays, 10) > 0) {
+      const days = parseInt(expiryDays, 10);
+      expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + days);
+    }
+
+    const keysToCreate: Array<{
+      licenseKey: string;
+      productId: string;
+      userId: string;
+      type: LicenseType;
+      prefix: string;
+      status: any;
+      deviceLimit: number;
+      expiresAt: Date | null;
+    }> = [];
 
     for (let i = 0; i < qty; i++) {
-      const license = await LicenseService.createLicense({
-        userId: user.id,
+      let licenseKey = formatLicenseKey(prefix);
+      keysToCreate.push({
+        licenseKey,
         productId,
-        type: (type as LicenseType) || "TRIAL",
-        prefix: prefix || "BL",
-        deviceLimit: deviceLimit ? parseInt(deviceLimit) : 1,
-        validDays: durationDays ? parseInt(durationDays) : undefined,
+        userId: adminUser.id,
+        type: (type || "TRIAL") as LicenseType,
+        prefix,
+        status: "ACTIVE",
+        deviceLimit: parseInt(deviceLimit || "1", 10),
+        expiresAt,
       });
-
-      generatedLicenses.push(license);
     }
+
+    await prisma.license.createMany({
+      data: keysToCreate,
+      skipDuplicates: true,
+    });
+
+    const createdLicenses = await prisma.license.findMany({
+      where: {
+        productId,
+        licenseKey: { in: keysToCreate.map((k) => k.licenseKey) },
+      },
+      include: {
+        product: { select: { name: true } },
+      },
+    });
 
     return NextResponse.json(
       {
         success: true,
-        count: generatedLicenses.length,
-        licenses: generatedLicenses,
+        count: createdLicenses.length,
+        licenses: createdLicenses,
+        keys: createdLicenses.map((l) => l.licenseKey),
       },
       { status: 201 }
     );
-  } catch (error) {
-    console.error("Bulk License Generation Error:", error);
+  } catch (error: any) {
+    console.error("POST /api/licenses/bulk Error:", error);
     return NextResponse.json(
-      { error: "INTERNAL_SERVER_ERROR" },
+      { error: "INTERNAL_SERVER_ERROR", message: error.message },
       { status: 500 }
     );
   }

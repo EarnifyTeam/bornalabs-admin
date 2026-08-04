@@ -39,18 +39,20 @@ enum ProductStatus {
 }
 
 enum LicenseType {
-  FREE
   TRIAL
   MONTHLY
+  QUARTERLY
   YEARLY
   LIFETIME
+  CUSTOM
 }
 
 enum LicenseStatus {
   ACTIVE
-  SUSPENDED
-  BLACKLISTED
+  INACTIVE
   EXPIRED
+  SUSPENDED
+  REVOKED
 }
 
 enum DeviceOS {
@@ -209,10 +211,13 @@ model License {
   type           LicenseType   @default(TRIAL)
   prefix         String        @db.VarChar(10)
   status         LicenseStatus @default(ACTIVE)
-  expiryDate     DateTime?
-  activationDate DateTime?
-  lastActiveAt   DateTime?
   deviceLimit    Int           @default(1)
+  currentDevices Int           @default(0)
+  issuedAt       DateTime      @default(now())
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  notes          String?
+  createdBy      String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)

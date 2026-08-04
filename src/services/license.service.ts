@@ -27,7 +27,7 @@ export class LicenseService {
     validDays?: number;
   }) {
     const licenseKey = this.generateLicenseKey(params.prefix);
-    const expiryDate = params.validDays 
+    const expiresAt = params.validDays 
       ? new Date(Date.now() + params.validDays * 24 * 60 * 60 * 1000) 
       : null;
 
@@ -39,7 +39,7 @@ export class LicenseService {
         type: params.type,
         prefix: params.prefix.toUpperCase(),
         deviceLimit: params.deviceLimit,
-        expiryDate,
+        expiresAt,
         status: "ACTIVE",
       },
     });
@@ -70,7 +70,7 @@ export class LicenseService {
       return { success: false, error: `LICENSE_${license.status}` };
     }
 
-    if (license.expiryDate && new Date() > license.expiryDate) {
+    if (license.expiresAt && new Date() > license.expiresAt) {
       // Update license status in db to EXPIRED
       await prisma.license.update({
         where: { id: license.id },
@@ -85,14 +85,14 @@ export class LicenseService {
     );
 
     if (existingDevice) {
-      // Update device lastActiveAt and license lastActiveAt
+      // Update device lastActiveAt and license lastUsedAt
       await prisma.device.update({
         where: { id: existingDevice.id },
         data: { lastActiveAt: new Date() },
       });
       await prisma.license.update({
         where: { id: license.id },
-        data: { lastActiveAt: new Date() },
+        data: { lastUsedAt: new Date() },
       });
       return { success: true, license, device: existingDevice };
     }
@@ -115,14 +115,10 @@ export class LicenseService {
       },
     });
 
-    // Update activationDate if this is the first activation
-    const activationDateUpdate = !license.activationDate ? { activationDate: new Date() } : {};
-
     await prisma.license.update({
       where: { id: license.id },
       data: {
-        lastActiveAt: new Date(),
-        ...activationDateUpdate,
+        lastUsedAt: new Date(),
       },
     });
 

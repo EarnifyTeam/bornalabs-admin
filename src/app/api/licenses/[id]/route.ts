@@ -1,21 +1,19 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { LicenseStatus, LicenseType } from "@prisma/client";
 
 /**
- * GET: Retrieve single license details by ID
+ * GET: Fetch single license details by ID
  */
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
     const license = await prisma.license.findUnique({
-      where: { id },
+      where: { id: params.id },
       include: {
-        user: { include: { profile: true } },
         product: true,
+        user: true,
         devices: true,
       },
     });
@@ -25,67 +23,79 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, license });
-  } catch (error) {
-    return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
-  }
-}
-
-/**
- * PATCH: Update license status, device limit, or expiry date
- */
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const { id } = params;
-    const body = await request.json();
-    const { status, deviceLimit, expiryDate, type } = body;
-
-    const updateData: any = {};
-    if (status) updateData.status = status as LicenseStatus;
-    if (deviceLimit !== undefined) updateData.deviceLimit = parseInt(deviceLimit);
-    if (expiryDate !== undefined) updateData.expiryDate = expiryDate ? new Date(expiryDate) : null;
-    if (type) updateData.type = type as LicenseType;
-
-    const updatedLicense = await prisma.license.update({
-      where: { id },
-      data: updateData,
-      include: {
-        user: true,
-        product: true,
-        devices: true,
-      },
-    });
-
-    return NextResponse.json({ success: true, license: updatedLicense });
-  } catch (error) {
-    console.error("PATCH /api/licenses/[id] Error:", error);
+  } catch (error: any) {
     return NextResponse.json(
-      { error: "INTERNAL_SERVER_ERROR" },
+      { error: "INTERNAL_SERVER_ERROR", message: error.message },
       { status: 500 }
     );
   }
 }
 
 /**
- * DELETE: Revoke/delete license key listing
+ * PATCH: Update license status (ACTIVE, SUSPENDED, REVOKED), device limits, expiry date
+ */
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json();
+    const existing = await prisma.license.findUnique({ where: { id: params.id } });
+
+    if (!existing) {
+      return NextResponse.json({ error: "LICENSE_NOT_FOUND" }, { status: 404 });
+    }
+
+    let expiresAt = existing.expiresAt;
+    if (body.expiryDays !== undefined) {
+      if (body.expiryDays === null || parseInt(body.expiryDays, 10) <= 0) {
+        expiresAt = null;
+      } else {
+        const days = parseInt(body.expiryDays, 10);
+        expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + days);
+      }
+    }
+
+    const updated = await prisma.license.update({
+      where: { id: params.id },
+      data: {
+        ...(body.status && { status: body.status }),
+        ...(body.type && { type: body.type }),
+        ...(body.deviceLimit !== undefined && { deviceLimit: parseInt(body.deviceLimit, 10) }),
+        ...(body.notes !== undefined && { notes: body.notes }),
+        expiresAt,
+      },
+      include: {
+        product: { select: { id: true, name: true } },
+        user: { select: { id: true, email: true } },
+      },
+    });
+
+    return NextResponse.json({ success: true, license: updated });
+  } catch (error: any) {
+    console.error("PATCH /api/licenses/[id] Error:", error);
+    return NextResponse.json(
+      { error: "INTERNAL_SERVER_ERROR", message: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE: Remove license record from database
  */
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
-
-    await prisma.license.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({ success: true, message: "LICENSE_REVOKED" });
-  } catch (error) {
+    await prisma.license.delete({ where: { id: params.id } });
+    return NextResponse.json({ success: true, message: "LICENSE_DELETED" });
+  } catch (error: any) {
+    console.error("DELETE /api/licenses/[id] Error:", error);
     return NextResponse.json(
-      { error: "INTERNAL_SERVER_ERROR" },
+      { error: "INTERNAL_SERVER_ERROR", message: error.message },
       { status: 500 }
     );
   }

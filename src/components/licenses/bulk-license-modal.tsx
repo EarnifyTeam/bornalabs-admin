@@ -12,11 +12,20 @@ interface ProductItem {
   name: string;
 }
 
+export interface BulkLicenseFormData {
+  quantity: string;
+  productId: string;
+  type: string;
+  prefix: string;
+  deviceLimit: number;
+  expiryDays: string;
+}
+
 interface BulkLicenseModalProps {
   isOpen: boolean;
   onClose: () => void;
   products: ProductItem[];
-  onGenerate: (data: any) => Promise<any[] | null>;
+  onGenerate: (data: BulkLicenseFormData) => Promise<any[] | null>;
 }
 
 export function BulkLicenseModal({
@@ -26,12 +35,12 @@ export function BulkLicenseModal({
   onGenerate,
 }: BulkLicenseModalProps) {
   const toast = useToast();
-  const [count, setCount] = useState("10");
+  const [quantity, setQuantity] = useState("10");
   const [productId, setProductId] = useState(products[0]?.id || "");
   const [type, setType] = useState("TRIAL");
   const [prefix, setPrefix] = useState("BULK");
   const [deviceLimit, setDeviceLimit] = useState(1);
-  const [durationDays, setDurationDays] = useState("30");
+  const [expiryDays, setExpiryDays] = useState("30");
   const [loading, setLoading] = useState(false);
   const [generatedKeys, setGeneratedKeys] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
@@ -44,18 +53,18 @@ export function BulkLicenseModal({
     setGeneratedKeys([]);
 
     const result = await onGenerate({
-      count,
+      quantity,
       productId: productId || products[0]?.id,
       type,
       prefix,
       deviceLimit,
-      durationDays,
+      expiryDays,
     });
 
     setLoading(false);
 
     if (result && Array.isArray(result)) {
-      const keys = result.map((item) => item.licenseKey);
+      const keys = result.map((item: any) => item.licenseKey || item);
       setGeneratedKeys(keys);
       toast.success(`Successfully generated ${keys.length} license keys in batch!`);
     }
@@ -112,8 +121,8 @@ export function BulkLicenseModal({
                 min={1}
                 max={100}
                 required
-                value={count}
-                onChange={(e) => setCount(e.target.value)}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
               />
 
               <div className="flex flex-col gap-1.5">
@@ -140,11 +149,12 @@ export function BulkLicenseModal({
                   onChange={(e) => setType(e.target.value)}
                   className="bg-surface2/40 border border-border rounded-sm py-2 px-2 text-foreground focus:outline-none w-full focus:border-border-active transition-all"
                 >
-                  <option value="FREE">Free Tier</option>
                   <option value="TRIAL">Trial</option>
                   <option value="MONTHLY">Monthly</option>
+                  <option value="QUARTERLY">Quarterly</option>
                   <option value="YEARLY">Yearly</option>
                   <option value="LIFETIME">Lifetime</option>
+                  <option value="CUSTOM">Custom</option>
                 </select>
               </div>
 
@@ -169,8 +179,8 @@ export function BulkLicenseModal({
             <Input
               label="Validity Duration (Days)"
               type="number"
-              value={durationDays}
-              onChange={(e) => setDurationDays(e.target.value)}
+              value={expiryDays}
+              onChange={(e) => setExpiryDays(e.target.value)}
               placeholder="30"
             />
 
@@ -179,7 +189,7 @@ export function BulkLicenseModal({
                 Cancel
               </Button>
               <Button type="submit" disabled={loading} variant="primary">
-                {loading ? "Generating Batch..." : `Generate ${count} Keys`}
+                {loading ? "Generating Batch..." : `Generate ${quantity} Keys`}
               </Button>
             </div>
           </form>
