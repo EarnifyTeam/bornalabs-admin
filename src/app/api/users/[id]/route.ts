@@ -1,22 +1,32 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { UserStatus, Role } from "@prisma/client";
 
 /**
- * GET: Retrieve single user account by ID with profile
+ * GET: Fetch complete single User Profile details including assigned licenses, products & devices
  */
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
     const user = await prisma.user.findUnique({
-      where: { id },
+      where: { id: params.id },
       include: {
         profile: true,
-        licenses: { include: { product: true } },
-        _count: { select: { licenses: true, orders: true } },
+        licenses: {
+          include: {
+            product: true,
+            devices: true,
+          },
+          orderBy: { createdAt: "desc" },
+        },
+        downloads: {
+          include: {
+            product: { select: { name: true } },
+          },
+          take: 5,
+          orderBy: { createdAt: "desc" },
+        },
       },
     });
 
@@ -25,50 +35,55 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, user });
-  } catch (error) {
-    return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: "INTERNAL_SERVER_ERROR", message: error.message },
+      { status: 500 }
+    );
   }
 }
 
 /**
- * PATCH: Update user details (status, role, premiumStatus, profile info)
+ * PATCH: Update user profile, role (SUPER_ADMIN, ADMIN, CUSTOMER), status (ACTIVE, SUSPENDED, BANNED)
  */
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
     const body = await request.json();
-    const { status, role, premiumStatus, notes, fullName, phone, password } = body;
+    const existing = await prisma.user.findUnique({ where: { id: params.id } });
 
-    const updateData: any = {};
-    if (status !== undefined) updateData.status = status as UserStatus;
-    if (role !== undefined) updateData.role = role as Role;
-    if (premiumStatus !== undefined) updateData.premiumStatus = premiumStatus;
-    if (notes !== undefined) updateData.notes = notes;
-    if (password !== undefined && password !== "") updateData.passwordHash = password;
+    if (!existing) {
+      return NextResponse.json({ error: "USER_NOT_FOUND" }, { status: 404 });
+    }
 
     const updatedUser = await prisma.user.update({
-      where: { id },
+      where: { id: params.id },
       data: {
-        ...updateData,
-        ...(fullName !== undefined || phone !== undefined
-          ? {
-              profile: {
-                upsert: {
-                  create: {
-                    fullName: fullName || "BornaLabs User",
-                    phone: phone || null,
-                  },
-                  update: {
-                    ...(fullName !== undefined && { fullName }),
-                    ...(phone !== undefined && { phone }),
-                  },
-                },
-              },
-            }
-          : {}),
+        ...(body.role && { role: body.role }),
+        ...(body.status && { status: body.status }),
+        ...(body.premiumStatus !== undefined && { premiumStatus: body.premiumStatus }),
+        ...(body.notes !== undefined && { notes: body.notes }),
+        ...(body.lastLoginAt && { lastLoginAt: new Date(body.lastLoginAt) }),
+        profile: {
+          upsert: {
+            create: {
+              fullName: body.fullName || "User",
+              phone: body.phone || null,
+              avatarUrl: body.avatarUrl || null,
+              country: body.country || null,
+              timezone: body.timezone || null,
+            },
+            update: {
+              ...(body.fullName && { fullName: body.fullName }),
+              ...(body.phone !== undefined && { phone: body.phone }),
+              ...(body.avatarUrl !== undefined && { avatarUrl: body.avatarUrl }),
+              ...(body.country !== undefined && { country: body.country }),
+              ...(body.timezone !== undefined && { timezone: body.timezone }),
+            },
+          },
+        },
       },
       include: {
         profile: true,
@@ -76,34 +91,29 @@ export async function PATCH(
     });
 
     return NextResponse.json({ success: true, user: updatedUser });
-  } catch (error) {
+  } catch (error: any) {
     console.error("PATCH /api/users/[id] Error:", error);
     return NextResponse.json(
-      { error: "INTERNAL_SERVER_ERROR" },
+      { error: "INTERNAL_SERVER_ERROR", message: error.message },
       { status: 500 }
     );
   }
 }
 
 /**
- * DELETE: Remove a user record from database
+ * DELETE: Remove user account (Super Admin privilege)
  */
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
-
-    await prisma.user.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({ success: true, message: "USER_DELETED" });
-  } catch (error) {
+    await prisma.user.delete({ where: { id: params.id } });
+    return NextResponse.json({ success: true, message: "USER_ACCOUNT_DELETED" });
+  } catch (error: any) {
     console.error("DELETE /api/users/[id] Error:", error);
     return NextResponse.json(
-      { error: "INTERNAL_SERVER_ERROR" },
+      { error: "INTERNAL_SERVER_ERROR", message: error.message },
       { status: 500 }
     );
   }

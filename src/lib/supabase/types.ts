@@ -6,8 +6,8 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "SUPPORT";
-export type UserStatus = "ACTIVE" | "SUSPENDED" | "BANNED";
+export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "SUPPORT" | "CUSTOMER";
+export type UserStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED" | "BANNED";
 export type ProductCategory = "AI_TOOL" | "CHROME_EXTENSION" | "DESKTOP_SOFTWARE" | "WEB_APPLICATION" | "AUTOMATION" | "API" | "FUTURE_PRODUCT";
 export type ProductStatus = "DRAFT" | "COMING_SOON" | "BETA" | "LIVE" | "DEPRECATED";
 export type LicenseType = "TRIAL" | "MONTHLY" | "QUARTERLY" | "YEARLY" | "LIFETIME" | "CUSTOM";
@@ -25,6 +25,7 @@ export interface Database {
           role: Role;
           status: UserStatus;
           premiumStatus: boolean;
+          lastLoginAt: string | null;
           notes: string | null;
           createdAt: string;
           updatedAt: string;
@@ -36,6 +37,7 @@ export interface Database {
           role?: Role;
           status?: UserStatus;
           premiumStatus?: boolean;
+          lastLoginAt?: string | null;
           notes?: string | null;
           createdAt?: string;
           updatedAt?: string;
@@ -47,6 +49,7 @@ export interface Database {
           role?: Role;
           status?: UserStatus;
           premiumStatus?: boolean;
+          lastLoginAt?: string | null;
           notes?: string | null;
           updatedAt?: string;
         };
@@ -58,6 +61,8 @@ export interface Database {
           fullName: string;
           avatarUrl: string | null;
           phone: string | null;
+          country: string | null;
+          timezone: string | null;
         };
         Insert: {
           id?: string;
@@ -65,11 +70,15 @@ export interface Database {
           fullName: string;
           avatarUrl?: string | null;
           phone?: string | null;
+          country?: string | null;
+          timezone?: string | null;
         };
         Update: {
           fullName?: string;
           avatarUrl?: string | null;
           phone?: string | null;
+          country?: string | null;
+          timezone?: string | null;
         };
       };
       Product: {

@@ -8,68 +8,92 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/toast";
 import { 
   Users, 
+  UserPlus, 
   Search, 
-  Plus, 
+  Filter, 
+  ShieldCheck, 
   ShieldAlert, 
-  UserMinus, 
-  Check, 
+  Ban, 
+  Edit3, 
+  Trash2, 
   RefreshCw, 
-  Award,
-  Edit2,
-  Trash2,
-  AlertCircle
+  Eye, 
+  ChevronLeft, 
+  ChevronRight,
+  Key,
+  Crown
 } from "lucide-react";
 import { UserModal, type UserFormData } from "@/components/users/user-modal";
+import { UserProfileDrawer } from "@/components/users/user-profile-drawer";
 
-interface Profile {
-  fullName: string;
-  phone?: string | null;
-}
-
-interface UserData {
+interface UserRecord {
   id: string;
   email: string;
   role: string;
-  status: "ACTIVE" | "SUSPENDED" | "BANNED";
+  status: string;
   premiumStatus: boolean;
-  notes: string | null;
-  profile: Profile | null;
+  notes?: string | null;
+  lastLoginAt?: string | null;
+  createdAt: string;
+  profile?: {
+    fullName: string;
+    phone?: string | null;
+    avatarUrl?: string | null;
+    country?: string | null;
+    timezone?: string | null;
+  };
   _count?: {
     licenses: number;
-    orders: number;
+    downloads: number;
   };
 }
 
 export default function UsersPage() {
   const toast = useToast();
-  const [users, setUsers] = useState<UserData[]>([]);
-  const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("All");
+  const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Modal State
+  // Filters & Pagination
+  const [search, setSearch] = useState("");
+  const [selectedRole, setSelectedRole] = useState("ALL");
+  const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Modal & Drawer State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserFormData | null>(null);
+  const [selectedDrawerUserId, setSelectedDrawerUserId] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
 
   const fetchUsers = async () => {
     setLoading(true);
     setError("");
     try {
-      let url = "/api/users";
-      if (roleFilter !== "All") {
-        url += `?role=${roleFilter.toUpperCase().replace(" ", "_")}`;
-      }
-      const response = await fetch(url);
-      const data = await response.json();
-      if (response.ok) {
+      const queryParams = new URLSearchParams({
+        search,
+        role: selectedRole,
+        status: selectedStatus,
+        page: page.toString(),
+        limit: "8",
+      });
+
+      const res = await fetch(`/api/users?${queryParams.toString()}`);
+      const data = await res.json();
+
+      if (res.ok) {
         setUsers(data.users || []);
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages || 1);
+          setTotalCount(data.pagination.total || 0);
+        }
       } else {
-        setError(data.error || "Failed to load users list.");
+        setError(data.message || "Failed to load user accounts.");
       }
     } catch (err) {
-      setError("Network error loading users.");
+      setError("Error connecting to Users API endpoint.");
     } finally {
       setLoading(false);
     }
@@ -77,23 +101,24 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, [roleFilter]);
+  }, [search, selectedRole, selectedStatus, page]);
 
-  const handleOpenCreateModal = () => {
+  const handleCreateNew = () => {
     setEditingUser(null);
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (u: UserData) => {
+  const handleEdit = (user: UserRecord) => {
     setEditingUser({
-      id: u.id,
-      fullName: u.profile?.fullName || "BornaLabs User",
-      email: u.email,
-      role: u.role,
-      status: u.status,
-      premiumStatus: u.premiumStatus,
-      phone: u.profile?.phone || "",
-      notes: u.notes || "",
+      id: user.id,
+      email: user.email,
+      fullName: user.profile?.fullName || "",
+      role: user.role,
+      status: user.status,
+      phone: user.profile?.phone || "",
+      country: user.profile?.country || "United States",
+      timezone: user.profile?.timezone || "UTC",
+      notes: user.notes || "",
     });
     setIsModalOpen(true);
   };
@@ -101,9 +126,9 @@ export default function UsersPage() {
   const handleSaveUser = async (formData: UserFormData) => {
     setModalLoading(true);
     try {
-      const isEditing = !!formData.id;
-      const url = isEditing ? `/api/users/${formData.id}` : "/api/users";
-      const method = isEditing ? "PATCH" : "POST";
+      const isEdit = !!formData.id;
+      const url = isEdit ? `/api/users/${formData.id}` : "/api/users";
+      const method = isEdit ? "PATCH" : "POST";
 
       const res = await fetch(url, {
         method,
@@ -114,90 +139,83 @@ export default function UsersPage() {
       const data = await res.json();
 
       if (res.ok) {
-        toast.success(`User account ${isEditing ? "updated" : "created"} successfully!`);
+        toast.success(`User account ${isEdit ? "updated" : "registered"} successfully!`);
         setIsModalOpen(false);
         fetchUsers();
       } else {
-        toast.error(data.error || "Failed to save user account.");
+        toast.error(data.message || "Failed to save user account.");
       }
     } catch (err) {
-      toast.error("Error saving user data.");
+      toast.error("Error saving user account.");
     } finally {
       setModalLoading(false);
     }
   };
 
-  const updateUserStatus = async (userId: string, status: string) => {
+  const handleUpdateStatus = async (id: string, newStatus: string, email: string) => {
     try {
-      const response = await fetch(`/api/users/${userId}`, {
+      const res = await fetch(`/api/users/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: newStatus }),
       });
-      if (response.ok) {
-        toast.success(`User account status updated to ${status}.`);
+
+      if (res.ok) {
+        toast.success(`Account ${email} set to ${newStatus}.`);
         fetchUsers();
       } else {
         toast.error("Failed to update user status.");
       }
     } catch (err) {
-      toast.error("Error sending status update request.");
+      toast.error("Error updating user status.");
     }
   };
 
-  const togglePremium = async (userId: string, currentPremium: boolean) => {
-    try {
-      const response = await fetch(`/api/users/${userId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ premiumStatus: !currentPremium }),
-      });
-      if (response.ok) {
-        toast.success(`User premium tier status ${!currentPremium ? "assigned" : "revoked"}.`);
-        fetchUsers();
-      } else {
-        toast.error("Failed to toggle premium status.");
-      }
-    } catch (err) {
-      toast.error("Error sending premium update request.");
-    }
-  };
-
-  const handleDeleteUser = async (userId: string, email: string) => {
-    if (!confirm(`Are you sure you want to delete user account "${email}"?`)) return;
+  const handleDeleteUser = async (id: string, email: string) => {
+    if (!confirm(`Are you sure you want to permanently delete user account "${email}"? This action cannot be undone.`)) return;
 
     try {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: "DELETE",
-      });
-
+      const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
       if (res.ok) {
-        toast.success(`User account "${email}" deleted.`);
+        toast.success(`User account ${email} deleted.`);
         fetchUsers();
       } else {
         toast.error("Failed to delete user account.");
       }
     } catch (err) {
-      toast.error("Error deleting user.");
+      toast.error("Error deleting user account.");
     }
   };
 
-  const filteredUsers = users.filter((u) => {
-    const fullName = u.profile?.fullName || "BornaLabs User";
-    const matchesSearch = 
-      fullName.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase()) ||
-      (u.notes && u.notes.toLowerCase().includes(search.toLowerCase()));
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case "SUPER_ADMIN":
+        return <Badge variant="active">SUPER ADMIN</Badge>;
+      case "ADMIN":
+        return <Badge variant="info">ADMIN</Badge>;
+      case "MANAGER":
+        return <Badge variant="warning">MANAGER</Badge>;
+      case "SUPPORT":
+        return <Badge variant="info">SUPPORT</Badge>;
+      case "CUSTOMER":
+        return <Badge variant="neutral">CUSTOMER</Badge>;
+      default:
+        return <Badge variant="neutral">{role}</Badge>;
+    }
+  };
 
-    return matchesSearch;
-  });
-
-  const getStatusVariant = (status: string) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case "ACTIVE": return "active";
-      case "SUSPENDED": return "warning";
-      case "BANNED": return "danger";
-      default: return "neutral";
+      case "ACTIVE":
+        return <Badge variant="active">ACTIVE</Badge>;
+      case "SUSPENDED":
+        return <Badge variant="warning">SUSPENDED</Badge>;
+      case "BANNED":
+        return <Badge variant="danger">BANNED</Badge>;
+      case "INACTIVE":
+        return <Badge variant="neutral">INACTIVE</Badge>;
+      default:
+        return <Badge variant="neutral">{status}</Badge>;
     }
   };
 
@@ -206,8 +224,8 @@ export default function UsersPage() {
       {/* Header controls */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="font-bricolage font-bold text-2xl tracking-tight text-white">User Operations</h2>
-          <p className="text-xs text-muted">Create, suspend, ban users, assign premium statuses, and adjust role access logs in Supabase DB.</p>
+          <h2 className="font-bricolage font-bold text-2xl tracking-tight text-white">User & Customer Operations</h2>
+          <p className="text-xs text-muted">Manage customer accounts, roles, access statuses, and license allocations in Supabase DB.</p>
         </div>
         <div className="flex items-center gap-3">
           <Button
@@ -216,147 +234,196 @@ export default function UsersPage() {
             icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-cyan" : ""}`} />}
             onClick={fetchUsers}
           >
-            Reload List
+            Refresh
           </Button>
           <Button
             variant="primary"
             size="sm"
-            icon={<Plus className="w-3.5 h-3.5" />}
-            onClick={handleOpenCreateModal}
+            icon={<UserPlus className="w-3.5 h-3.5" />}
+            onClick={handleCreateNew}
           >
-            New User
+            Register User
           </Button>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <GlassCard hoverable={false} className="py-4 px-6 flex items-center justify-between gap-4">
-        <div className="w-full max-w-sm">
-          <Input
-            placeholder="Search users by name, email address, notes..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            leftIcon={<Search className="w-3.5 h-3.5 text-muted" />}
-          />
+      {/* Filter Bar & Role Tabs */}
+      <GlassCard className="flex flex-col gap-4 p-4">
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          {/* Role Filter Tabs */}
+          <div className="flex gap-2 flex-wrap">
+            {["ALL", "SUPER_ADMIN", "ADMIN", "MANAGER", "SUPPORT", "CUSTOMER"].map((roleTab) => (
+              <button
+                key={roleTab}
+                onClick={() => { setSelectedRole(roleTab); setPage(1); }}
+                className={`px-3 py-1.5 rounded-sm font-bold text-xs transition-all ${
+                  selectedRole === roleTab
+                    ? "bg-surface border border-cyan/40 text-cyan shadow-sm"
+                    : "bg-surface2/20 text-muted hover:text-white"
+                }`}
+              >
+                {roleTab.replace("_", " ")}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Input */}
+          <div className="w-full md:w-64 relative">
+            <Input
+              placeholder="Search user, email or phone..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              leftIcon={<Search className="w-3.5 h-3.5 text-muted" />}
+            />
+          </div>
         </div>
-        <div className="flex gap-2">
-          {["All", "Super Admin", "Admin", "Manager", "Support"].map((role, idx) => (
-            <button 
-              key={idx} 
-              onClick={() => setRoleFilter(role)}
-              className={`text-[10px] font-bold px-3 py-1.5 rounded-sm border transition-all ${
-                roleFilter === role 
-                  ? "bg-surface border-border-active text-cyan" 
-                  : "bg-surface2/20 border-border text-muted hover:text-foreground hover:bg-surface/30"
-              }`}
+
+        {/* Dropdown Filters */}
+        <div className="flex items-center gap-4 border-t border-border pt-3">
+          <div className="flex items-center gap-2">
+            <label className="text-muted font-bold text-[10px] uppercase shrink-0">Account Status:</label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => { setSelectedStatus(e.target.value); setPage(1); }}
+              className="bg-surface2/40 border border-border rounded-sm py-1.5 px-3 text-foreground text-xs focus:outline-none w-48"
             >
-              {role}
-            </button>
-          ))}
+              <option value="ALL">All Statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+              <option value="SUSPENDED">Suspended</option>
+              <option value="BANNED">Banned</option>
+            </select>
+          </div>
         </div>
       </GlassCard>
 
-      {/* Users list table */}
+      {/* Users Data Table */}
       <GlassCard className="flex flex-col gap-4">
-        {loading && users.length === 0 ? (
-          <div className="text-center py-12 text-muted">Loading user accounts database...</div>
+        {loading ? (
+          <div className="text-center py-16 text-muted">Loading user accounts...</div>
         ) : error ? (
-          <div className="text-center py-12 text-red font-semibold">{error}</div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="text-center py-12 text-muted flex flex-col items-center justify-center gap-2">
+          <div className="text-center py-16 text-red font-semibold">{error}</div>
+        ) : users.length === 0 ? (
+          <div className="text-center py-16 text-muted flex flex-col items-center justify-center gap-2">
             <Users className="w-8 h-8 text-muted/50" />
-            <span>No user accounts matching current filter criteria.</span>
+            <span>No user accounts found matching query.</span>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-border text-muted font-bold text-[10px] uppercase tracking-wider">
-                  <th className="py-3 px-4">Profile Name</th>
-                  <th className="py-3">Email Address</th>
+                  <th className="py-3 px-4">User Details</th>
                   <th className="py-3">Role</th>
-                  <th className="py-3">Premium Status</th>
-                  <th className="py-3">Account State</th>
-                  <th className="py-3">Administrative Notes</th>
+                  <th className="py-3">Status</th>
+                  <th className="py-3">Country</th>
+                  <th className="py-3">Assigned Licenses</th>
+                  <th className="py-3">Registered On</th>
                   <th className="py-3 text-right pr-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map((u, idx) => {
-                  const fullName = u.profile?.fullName || "BornaLabs User";
-                  return (
-                    <tr key={idx} className="border-b border-border last:border-0 hover:bg-surface/20 transition-all">
-                      <td className="py-4 px-4 font-bold text-foreground">{fullName}</td>
-                      <td className="py-4 text-muted font-mono">{u.email}</td>
-                      <td className="py-4 font-semibold text-violet text-[10px]">{u.role}</td>
-                      <td className="py-4">
-                        <button
-                          onClick={() => togglePremium(u.id, u.premiumStatus)}
-                          className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-sm border hover:scale-105 transition-all ${
-                            u.premiumStatus 
-                              ? "bg-green/10 border-green/20 text-green" 
-                              : "bg-muted/5 border-border text-muted hover:border-cyan hover:text-cyan"
-                          }`}
-                          title="Toggle Premium Tier"
-                        >
-                          {u.premiumStatus ? <Check className="w-2.5 h-2.5" /> : <Award className="w-2.5 h-2.5" />}
-                          {u.premiumStatus ? "Premium Active" : "Assign Premium"}
-                        </button>
-                      </td>
-                      <td className="py-4">
-                        <Badge variant={getStatusVariant(u.status)}>{u.status}</Badge>
-                      </td>
-                      <td className="py-4 text-muted text-[11px] max-w-xs truncate">{u.notes || "No notes saved."}</td>
-                      <td className="py-4 text-right pr-4">
-                        <div className="flex justify-end gap-2 text-muted">
-                          {u.status !== "ACTIVE" && (
-                            <button 
-                              onClick={() => updateUserStatus(u.id, "ACTIVE")}
-                              className="px-2 py-0.5 bg-green/10 hover:bg-green/20 text-green font-bold text-[9px] border border-green/20 rounded-sm"
-                              title="Reactivate Account"
-                            >
-                              Activate
-                            </button>
-                          )}
-                          {u.status === "ACTIVE" && (
-                            <>
-                              <button 
-                                onClick={() => updateUserStatus(u.id, "SUSPENDED")}
-                                className="p-1 hover:text-gold transition-all" 
-                                title="Suspend User Account"
-                              >
-                                <ShieldAlert className="w-3.5 h-3.5" />
-                              </button>
-                              <button 
-                                onClick={() => updateUserStatus(u.id, "BANNED")}
-                                className="p-1 hover:text-red transition-all" 
-                                title="Ban Account"
-                              >
-                                <UserMinus className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                          <button
-                            onClick={() => handleOpenEditModal(u)}
-                            className="p-1 hover:text-cyan transition-all"
-                            title="Edit User Profile"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(u.id, u.email)}
-                            className="p-1 hover:text-red transition-all"
-                            title="Delete User"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-b border-border last:border-0 hover:bg-surface/20 transition-all">
+                    <td className="py-4 px-4 font-bold text-white">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan to-violet flex items-center justify-center font-bold text-white text-xs shrink-0">
+                          {u.profile?.fullName?.slice(0, 2)?.toUpperCase() || "U"}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        <div className="flex flex-col">
+                          <span>{u.profile?.fullName || "User Account"}</span>
+                          <span className="text-[10px] text-muted font-mono font-normal">{u.email}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4">{getRoleBadge(u.role)}</td>
+                    <td className="py-4">{getStatusBadge(u.status)}</td>
+                    <td className="py-4 text-muted text-[11px]">{u.profile?.country || "Global"}</td>
+                    <td className="py-4 font-mono text-cyan font-bold text-[11px]">
+                      {u._count?.licenses || 0} Key(s)
+                    </td>
+                    <td className="py-4 text-muted text-[10px]">
+                      {new Date(u.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="py-4 text-right pr-4">
+                      <div className="flex justify-end items-center gap-2">
+                        <button
+                          onClick={() => setSelectedDrawerUserId(u.id)}
+                          className="p-1 hover:text-cyan transition-all text-muted"
+                          title="View Profile Drawer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleEdit(u)}
+                          className="p-1 hover:text-cyan transition-all text-muted"
+                          title="Edit User Account"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Status Toggles */}
+                        {u.status === "ACTIVE" ? (
+                          <button
+                            onClick={() => handleUpdateStatus(u.id, "SUSPENDED", u.email)}
+                            className="p-1 hover:text-gold transition-all text-muted"
+                            title="Suspend User Access"
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleUpdateStatus(u.id, "ACTIVE", u.email)}
+                            className="p-1 hover:text-green transition-all text-muted"
+                            title="Activate User Access"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-green" />
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleDeleteUser(u.id, u.email)}
+                          className="p-1 hover:text-red transition-all text-muted"
+                          title="Delete User Account"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-border pt-4 px-2">
+            <span className="text-muted text-[10px]">
+              Page <span className="text-white font-bold">{page}</span> of <span className="text-white font-bold">{totalPages}</span> ({totalCount} total users)
+            </span>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                icon={<ChevronLeft className="w-3.5 h-3.5" />}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                icon={<ChevronRight className="w-3.5 h-3.5" />}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         )}
       </GlassCard>
@@ -368,6 +435,13 @@ export default function UsersPage() {
         onSave={handleSaveUser}
         initialData={editingUser}
         loading={modalLoading}
+      />
+
+      {/* User Profile Drawer */}
+      <UserProfileDrawer
+        userId={selectedDrawerUserId}
+        isOpen={!!selectedDrawerUserId}
+        onClose={() => setSelectedDrawerUserId(null)}
       />
     </div>
   );

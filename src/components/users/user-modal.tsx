@@ -1,20 +1,20 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { X, User, Shield, Award } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { X, User, Mail, Phone, Globe, Shield, Clock } from "lucide-react";
 
 export interface UserFormData {
   id?: string;
-  fullName: string;
   email: string;
-  password?: string;
+  fullName: string;
   role: string;
   status: string;
-  premiumStatus: boolean;
   phone: string;
+  country: string;
+  timezone: string;
   notes: string;
 }
 
@@ -26,6 +26,17 @@ interface UserModalProps {
   loading?: boolean;
 }
 
+const defaultFormData: UserFormData = {
+  email: "",
+  fullName: "",
+  role: "CUSTOMER",
+  status: "ACTIVE",
+  phone: "",
+  country: "United States",
+  timezone: "UTC",
+  notes: "",
+};
+
 export function UserModal({
   isOpen,
   onClose,
@@ -33,169 +44,131 @@ export function UserModal({
   initialData,
   loading = false,
 }: UserModalProps) {
-  const [formData, setFormData] = useState<UserFormData>({
-    fullName: "",
-    email: "",
-    password: "",
-    role: "SUPPORT",
-    status: "ACTIVE",
-    premiumStatus: false,
-    phone: "",
-    notes: "",
-  });
+  const [formData, setFormData] = useState<UserFormData>(defaultFormData);
 
   useEffect(() => {
     if (initialData) {
-      setFormData({
-        ...initialData,
-        password: "",
-      });
+      setFormData(initialData);
     } else {
-      setFormData({
-        fullName: "",
-        email: "",
-        password: "",
-        role: "SUPPORT",
-        status: "ACTIVE",
-        premiumStatus: false,
-        phone: "",
-        notes: "",
-      });
+      setFormData(defaultFormData);
     }
   }, [initialData, isOpen]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await onSave(formData);
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md">
-      <GlassCard hoverable={false} className="w-full max-w-lg flex flex-col gap-6 p-6 relative border-cyan/20">
-        {/* Header */}
-        <div className="flex justify-between items-center border-b border-border pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-cyan/10 border border-cyan/20 flex items-center justify-center text-cyan">
-              <User className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="font-bricolage font-bold text-base text-white">
-                {initialData ? "Edit User Account" : "New User Registration"}
-              </h3>
-              <p className="text-[10px] text-muted">Configure account role and administrative status in Supabase DB.</p>
-            </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
+      <GlassCard hoverable={false} className="w-full max-w-lg flex flex-col gap-6 p-6 my-8 border-cyan/20">
+        {/* Modal Header */}
+        <div className="flex justify-between items-center border-b border-border pb-4">
+          <div>
+            <h2 className="font-bricolage font-bold text-lg text-white">
+              {initialData ? "Edit User Account" : "Register Customer Account"}
+            </h2>
+            <p className="text-xs text-muted">Create or modify customer profile and role access levels in Supabase DB.</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-muted hover:text-white hover:bg-surface/40 rounded-sm transition-all"
+            className="p-1 rounded-sm text-muted hover:text-foreground hover:bg-surface2/50 transition-all"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form Body */}
+        {/* Modal Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-xs">
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Full Name"
-              required
-              value={formData.fullName}
-              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-              placeholder="e.g. Suraj Kumar"
-            />
+          <Input
+            label="Full Name *"
+            required
+            value={formData.fullName}
+            onChange={(e) => setFormData((prev) => ({ ...prev, fullName: e.target.value }))}
+            placeholder="John Doe"
+            leftIcon={<User className="w-4 h-4 text-muted" />}
+          />
 
-            <Input
-              label="Email Address"
-              type="email"
-              required
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="user@bornalabs.com"
-              disabled={!!initialData}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label={initialData ? "New Password (Leave blank to keep)" : "Account Password"}
-              type="password"
-              required={!initialData}
-              value={formData.password || ""}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              placeholder="••••••••"
-            />
-
-            <Input
-              label="Phone Number"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="+1 (555) 000-0000"
-            />
-          </div>
+          <Input
+            label="Email Address *"
+            type="email"
+            required
+            disabled={!!initialData}
+            value={formData.email}
+            onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+            placeholder="john@example.com"
+            leftIcon={<Mail className="w-4 h-4 text-muted" />}
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-muted font-bold text-[10px] uppercase">Access Role</label>
+              <label className="text-muted font-bold text-[10px] uppercase">Access Role *</label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="bg-surface2/40 border border-border rounded-sm py-2 px-2 text-foreground focus:outline-none w-full focus:border-border-active transition-all"
+                onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value }))}
+                className="bg-surface2/40 border border-border rounded-sm py-2 px-3 text-foreground focus:outline-none w-full focus:border-border-active transition-all"
               >
-                <option value="SUPER_ADMIN">Super Admin</option>
-                <option value="ADMIN">Admin</option>
-                <option value="MANAGER">Manager</option>
-                <option value="SUPPORT">Support</option>
+                <option value="CUSTOMER">Customer User</option>
+                <option value="SUPPORT">Support Officer</option>
+                <option value="MANAGER">Product Manager</option>
+                <option value="ADMIN">System Admin</option>
+                <option value="SUPER_ADMIN">Super Administrator</option>
               </select>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-muted font-bold text-[10px] uppercase">Account State</label>
+              <label className="text-muted font-bold text-[10px] uppercase">Account Status *</label>
               <select
                 value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="bg-surface2/40 border border-border rounded-sm py-2 px-2 text-foreground focus:outline-none w-full focus:border-border-active transition-all"
+                onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value }))}
+                className="bg-surface2/40 border border-border rounded-sm py-2 px-3 text-foreground focus:outline-none w-full focus:border-border-active transition-all"
               >
-                <option value="ACTIVE">Active</option>
-                <option value="SUSPENDED">Suspended</option>
+                <option value="ACTIVE">Active Account</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="SUSPENDED">Suspended Access</option>
                 <option value="BANNED">Banned</option>
               </select>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 py-1">
-            <input
-              type="checkbox"
-              id="premiumStatus"
-              checked={formData.premiumStatus}
-              onChange={(e) => setFormData({ ...formData, premiumStatus: e.target.checked })}
-              className="accent-cyan w-4 h-4 rounded-sm border-border cursor-pointer"
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Phone Number"
+              value={formData.phone}
+              onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+              placeholder="+1 (555) 000-0000"
+              leftIcon={<Phone className="w-4 h-4 text-muted" />}
             />
-            <label htmlFor="premiumStatus" className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5 text-gold" />
-              Assign Premium Tier Status
-            </label>
+
+            <Input
+              label="Country"
+              value={formData.country}
+              onChange={(e) => setFormData((prev) => ({ ...prev, country: e.target.value }))}
+              placeholder="United States"
+              leftIcon={<Globe className="w-4 h-4 text-muted" />}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-muted font-bold text-[10px] uppercase">Administrative Notes</label>
+            <label className="text-muted font-bold text-[10px] uppercase">Admin Internal Notes</label>
             <textarea
               rows={2}
               value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Internal admin notes regarding account access or history..."
-              className="bg-surface2/40 border border-border rounded-sm py-2 px-3 text-foreground focus:outline-none w-full focus:border-border-active transition-all"
+              onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+              placeholder="Customer support tier notes..."
+              className="bg-surface2/40 border border-border rounded-sm p-3 text-foreground focus:outline-none w-full focus:border-border-active transition-all text-xs"
             />
           </div>
 
-          {/* Buttons */}
-          <div className="flex justify-end gap-3 pt-3 border-t border-border">
-            <Button type="button" variant="ghost" onClick={onClose}>
+          {/* Actions */}
+          <div className="flex justify-end gap-3 border-t border-border pt-4 mt-2">
+            <Button variant="secondary" type="button" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} variant="primary">
-              {loading ? "Saving User..." : initialData ? "Update Account" : "Create User Account"}
+            <Button variant="primary" type="submit" disabled={loading}>
+              {loading ? "Saving Account..." : initialData ? "Update User" : "Register User"}
             </Button>
           </div>
         </form>

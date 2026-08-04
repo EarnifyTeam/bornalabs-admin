@@ -12,10 +12,12 @@ enum Role {
   ADMIN
   MANAGER
   SUPPORT
+  CUSTOMER
 }
 
 enum UserStatus {
   ACTIVE
+  INACTIVE
   SUSPENDED
   BANNED
 }
@@ -99,9 +101,10 @@ model User {
   id              String           @id @default(uuid())
   email           String           @unique
   passwordHash    String
-  role            Role             @default(SUPPORT)
+  role            Role             @default(CUSTOMER)
   status          UserStatus       @default(ACTIVE)
   premiumStatus   Boolean          @default(false)
+  lastLoginAt     DateTime?
   notes           String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -122,6 +125,8 @@ model Profile {
   fullName  String
   avatarUrl String?
   phone     String?
+  country   String?
+  timezone  String?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
