@@ -70,7 +70,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/forgot-password");
+  const isAuthPage =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password");
+
   const isDashboardPage =
     pathname === "/" ||
     pathname.startsWith("/users") ||
@@ -79,11 +83,13 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/licenses") ||
     pathname.startsWith("/settings");
 
+  // Redirect unauthenticated users accessing protected routes to /login
   if (isDashboardPage && !user) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
 
+  // Redirect authenticated users accessing auth routes to /
   if (isAuthPage && user) {
     const dashboardUrl = new URL("/", request.url);
     return NextResponse.redirect(dashboardUrl);

@@ -3,15 +3,39 @@
 import React, { useState } from "react";
 import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-import { GlassCard } from "@/components/glass-card";
+import { GlassCard } from "@/components/ui/glass-card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const supabase = createClient();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setError("");
+    setLoading(true);
+
+    try {
+      const redirectUrl = `${window.location.origin}/reset-password`;
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
+      });
+
+      if (resetError) {
+        setError(resetError.message || "Failed to send reset email.");
+      } else {
+        setSubmitted(true);
+      }
+    } catch (err: any) {
+      setError("Error sending password reset request.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -30,6 +54,12 @@ export default function ForgotPasswordPage() {
           </div>
         </div>
 
+        {error && (
+          <div className="border border-red/20 bg-red/5 text-red text-[11px] p-3 rounded-sm text-center font-semibold">
+            {error}
+          </div>
+        )}
+
         {submitted ? (
           <div className="flex flex-col items-center text-center gap-3 p-4 border border-green/20 bg-green/5 rounded-sm">
             <CheckCircle2 className="w-8 h-8 text-green animate-bounce" />
@@ -43,27 +73,25 @@ export default function ForgotPasswordPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-xs">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-muted font-bold text-[10px] uppercase">Email Address</label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-muted absolute left-3 top-2.5" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@bornalabs.com"
-                  className="bg-surface2/40 border border-border rounded-sm py-2 pl-9 pr-4 text-foreground focus:outline-none w-full focus:border-border-active transition-all"
-                />
-              </div>
-            </div>
+            <Input
+              label="Email Address"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="admin@bornalabs.com"
+              leftIcon={<Mail className="w-4 h-4 text-muted" />}
+            />
 
-            <button
+            <Button
               type="submit"
-              className="w-full text-center text-xs font-bold text-white bg-gradient-to-tr from-cyan to-violet py-2.5 rounded-sm shadow-md hover:opacity-90 transition-all mt-2"
+              disabled={loading}
+              variant="primary"
+              size="md"
+              className="w-full mt-2"
             >
-              Send Reset Instructions
-            </button>
+              {loading ? "Transmitting Request..." : "Send Reset Instructions"}
+            </Button>
 
             <Link href="/login" className="text-muted hover:text-foreground text-[10px] font-semibold text-center mt-2 flex items-center justify-center gap-1">
               <ArrowLeft className="w-3.5 h-3.5" /> Return to Login
