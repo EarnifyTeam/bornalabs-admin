@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { type User as SupabaseUser } from "@supabase/supabase-js";
+import { type User as SupabaseUser, type Session } from "@supabase/supabase-js";
+import { validateSupabaseConfig } from "@/config/env";
 
 export interface AuthUser {
   id: string;
@@ -15,8 +16,12 @@ export interface AuthUser {
 interface AuthContextType {
   user: AuthUser;
   supabaseUser: SupabaseUser | null;
+  session: Session | null;
   loading: boolean;
+  isConfigValid: boolean;
+  missingConfigKeys: string[];
   signOut: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const defaultAuthUser: AuthUser = {
@@ -32,64 +37,95 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser>(defaultAuthUser);
   const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const { isValid: isConfigValid, missingKeys: missingConfigKeys } = validateSupabaseConfig();
   const supabase = createClient();
 
+  const syncUserState = (activeSession: Session | null) => {
+    if (activeSession?.user) {
+      setSession(activeSession);
+      setSupabaseUser(activeSession.user);
+      setUser({
+        id: activeSession.user.id,
+        email: activeSession.user.email || "",
+        fullName:
+          activeSession.user.user_metadata?.full_name ||
+          activeSession.user.email?.split("@")[0] ||
+          "Admin User",
+        role: activeSession.user.user_metadata?.role || "SUPER_ADMIN",
+        isAuthenticated: true,
+      });
+    } else {
+      setSession(null);
+      setSupabaseUser(null);
+      setUser(defaultAuthUser);
+    }
+  };
+
+  const refreshSession = async () => {
+    try {
+      const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+      syncUserState(refreshedSession);
+    } catch (err) {
+      console.error("Error refreshing session:", err);
+    }
+  };
+
   useEffect(() => {
-    // Fetch initial user session
-    const getUserSession = async () => {
+    if (!isConfigValid) {
+      setLoading(false);
+      return;
+    }
+
+    // Get initial session
+    const getInitialSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setSupabaseUser(session.user);
-          setUser({
-            id: session.user.id,
-            email: session.user.email || "",
-            fullName: session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "Admin",
-            role: session.user.user_metadata?.role || "SUPER_ADMIN",
-            isAuthenticated: true,
-          });
-        }
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        syncUserState(currentSession);
       } catch (error) {
-        console.error("Error fetching session:", error);
+        console.error("Error restoring session:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    getUserSession();
+    getInitialSession();
 
-    // Listen to Supabase auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setSupabaseUser(session.user);
-        setUser({
-          id: session.user.id,
-          email: session.user.email || "",
-          fullName: session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "Admin",
-          role: session.user.user_metadata?.role || "SUPER_ADMIN",
-          isAuthenticated: true,
-        });
-      } else {
-        setSupabaseUser(null);
-        setUser(defaultAuthUser);
-      }
+    // Listen to Auth State Changes (Persistent Login & Refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      syncUserState(newSession);
       setLoading(false);
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [isConfigValid]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(defaultAuthUser);
-    setSupabaseUser(null);
+    try {
+      await supabase.auth.signOut();
+      syncUserState(null);
+    } catch (err) {
+      console.error("Error signing out:", err);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, supabaseUser, loading, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        supabaseUser,
+        session,
+        loading,
+        isConfigValid,
+        missingConfigKeys,
+        signOut,
+        refreshSession,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

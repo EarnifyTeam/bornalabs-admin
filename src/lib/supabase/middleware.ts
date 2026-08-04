@@ -11,7 +11,6 @@ export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Fallback if environment variables are not configured yet
   if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes("placeholder")) {
     return response;
   }
@@ -72,11 +71,13 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/licenses") ||
     pathname.startsWith("/settings");
 
+  // Redirect unauthenticated users accessing protected routes to /login
   if (isDashboardPage && !user) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
 
+  // Redirect authenticated users accessing auth routes to /
   if (isAuthPage && user) {
     const dashboardUrl = new URL("/", request.url);
     return NextResponse.redirect(dashboardUrl);

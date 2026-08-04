@@ -2,14 +2,16 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, Shield, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Shield, Eye, EyeOff, AlertTriangle } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/auth-provider";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { isConfigValid, missingConfigKeys } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -35,7 +37,7 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (err: any) {
-      setError("Connection error to authentication server.");
+      setError("Connection error to Supabase authentication server.");
     } finally {
       setLoading(false);
     }
@@ -55,9 +57,24 @@ export default function LoginPage() {
           </div>
           <div>
             <h2 className="font-bricolage font-bold text-lg tracking-tight">BornaLabs Control Center</h2>
-            <p className="text-[10px] text-muted tracking-wider uppercase font-semibold">Supabase Auth Enabled</p>
+            <p className="text-[10px] text-muted tracking-wider uppercase font-semibold">Production Supabase Auth</p>
           </div>
         </div>
+
+        {!isConfigValid && (
+          <div className="border border-gold/30 bg-gold/5 text-gold text-[10px] p-3 rounded-sm flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold">Missing Environment Variables:</span>
+              <ul className="list-disc list-inside mt-1 font-mono text-[9px]">
+                {missingConfigKeys.map((key) => (
+                  <li key={key}>{key}</li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[9px] text-muted">Configure keys in <code className="text-white">.env</code> file.</p>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="border border-red/20 bg-red/5 text-red text-[11px] p-3 rounded-sm text-center font-semibold">
