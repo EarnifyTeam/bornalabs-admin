@@ -65,19 +65,38 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // 1. Try Supabase Auth first
       const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (authError) {
-        setError(authError.message || "Failed to authenticate session.");
-      } else {
+      if (!authError) {
         router.push("/");
         router.refresh();
+        return;
+      }
+
+      // 2. Fallback to Internal Prisma API Authentication
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (res.ok) {
+        router.push("/");
+        router.refresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(
+          data.error === "INVALID_CREDENTIALS"
+            ? "Invalid email or password."
+            : authError.message || "Failed to authenticate session."
+        );
       }
     } catch (err: any) {
-      setError("Connection error to Supabase authentication server.");
+      setError("Connection error to authentication server.");
     } finally {
       setLoading(false);
     }

@@ -83,7 +83,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const getInitialSession = async () => {
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
-        syncUserState(currentSession);
+        if (currentSession?.user) {
+          syncUserState(currentSession);
+        } else {
+          // Check internal database session fallback
+          const res = await fetch("/api/user/dashboard").catch(() => null);
+          if (res && res.ok) {
+            const data = await res.json().catch(() => null);
+            if (data?.user) {
+              setUser({
+                id: data.user.id,
+                email: data.user.email,
+                fullName: data.user.fullName || "Admin User",
+                role: data.user.role || "SUPER_ADMIN",
+                isAuthenticated: true,
+              });
+              setLoading(false);
+              return;
+            }
+          }
+          syncUserState(null);
+        }
       } catch (error) {
         console.error("Error restoring session:", error);
       } finally {
@@ -106,7 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut().catch(() => {});
+      await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
       syncUserState(null);
     } catch (err) {
       console.error("Error signing out:", err);

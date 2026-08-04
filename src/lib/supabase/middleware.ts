@@ -69,6 +69,9 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const bornaSession = request.cookies.get("borna_session")?.value;
+  const isAuthenticated = !!user || !!bornaSession;
+
   const { pathname } = request.nextUrl;
   const isAuthPage =
     pathname.startsWith("/login") ||
@@ -84,13 +87,13 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/settings");
 
   // Redirect unauthenticated users accessing protected routes to /login
-  if (isDashboardPage && !user) {
+  if (isDashboardPage && !isAuthenticated) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
 
   // Redirect authenticated users accessing auth routes to /
-  if (isAuthPage && user) {
+  if (isAuthPage && isAuthenticated) {
     const dashboardUrl = new URL("/", request.url);
     return NextResponse.redirect(dashboardUrl);
   }
