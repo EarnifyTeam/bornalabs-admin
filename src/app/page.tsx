@@ -9,6 +9,8 @@ import { ProductCard } from "@/components/public/product-card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Sparkles, ArrowRight, Package, Clock, ShieldCheck, Cpu } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function PublicHomePage() {
   const [featuredProducts, latestProducts, comingSoonProducts] = await Promise.all([
     getFeaturedProducts(6),
