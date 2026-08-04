@@ -1,482 +1,431 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { GlassCard } from "@/components/glass-card";
+import { GlassCard } from "@/components/ui/glass-card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/toast";
 import { 
   Key, 
-  Plus, 
   Search, 
-  RefreshCw, 
-  Ban, 
+  Plus, 
+  Layers, 
+  Edit2, 
   Trash2, 
-  CheckCircle,
-  AlertTriangle,
-  Monitor,
-  X
+  RefreshCw, 
+  Copy, 
+  Smartphone, 
+  Clock,
+  ShieldAlert,
+  CheckCircle2,
+  XCircle,
+  AlertCircle
 } from "lucide-react";
+import { LicenseModal, type LicenseFormData } from "@/components/licenses/license-modal";
+import { BulkLicenseModal } from "@/components/licenses/bulk-license-modal";
 
-interface Product {
-  name: string;
-  slug: string;
-}
-
-interface User {
-  email: string;
-}
-
-interface LicenseData {
+interface LicenseRecord {
   id: string;
   licenseKey: string;
-  type: string;
   prefix: string;
-  status: string;
+  type: string;
+  status: "ACTIVE" | "SUSPENDED" | "BLACKLISTED" | "EXPIRED";
+  deviceLimit: number;
   expiryDate: string | null;
   activationDate: string | null;
   lastActiveAt: string | null;
-  deviceLimit: number;
-  user: User;
-  product: Product;
+  createdAt: string;
+  user: {
+    email: string;
+    profile?: { fullName: string } | null;
+  };
+  product: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  devices: any[];
   _count?: {
     devices: number;
   };
 }
 
+interface ProductItem {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export default function LicensesPage() {
-  const [licenses, setLicenses] = useState<LicenseData[]>([]);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const toast = useToast();
+  const [licenses, setLicenses] = useState<LicenseRecord[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [typeFilter, setTypeFilter] = useState("ALL");
   const [error, setError] = useState("");
 
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [email, setEmail] = useState("");
-  const [productSlug, setProductSlug] = useState("");
-  const [type, setType] = useState("TRIAL");
-  const [prefix, setPrefix] = useState("BL");
-  const [deviceLimit, setDeviceLimit] = useState("1");
-  const [durationDays, setDurationDays] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  // Modals state
+  const [isSingleModalOpen, setIsSingleModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [editingLicense, setEditingLicense] = useState<LicenseFormData | null>(null);
+  const [singleModalLoading, setSingleModalLoading] = useState(false);
 
   const fetchLicenses = async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/licenses");
-      const data = await response.json();
-      if (response.ok) {
+      let url = "/api/licenses";
+      const params = new URLSearchParams();
+      if (statusFilter !== "ALL") params.append("status", statusFilter);
+      if (typeFilter !== "ALL") params.append("type", typeFilter);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const res = await fetch(url);
+      const data = await res.json();
+      if (res.ok) {
         setLicenses(data.licenses || []);
       } else {
-        setError(data.error || "Failed to load license manager registry.");
+        setError(data.error || "Failed to load licenses data.");
       }
     } catch (err) {
-      setError("Network error fetching licenses.");
+      setError("Network error connecting to licenses API.");
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchProductsList = async () => {
+    try {
+      const res = await fetch("/api/products");
+      const data = await res.json();
+      if (res.ok) {
+        setProducts(data.products || []);
+      }
+    } catch (err) {
+      console.error("Failed to load products for dropdown:", err);
+    }
+  };
+
   useEffect(() => {
-    fetchLicenses();
+    fetchProductsList();
   }, []);
 
-  const handleGenerateLicense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
+  useEffect(() => {
+    fetchLicenses();
+  }, [statusFilter, typeFilter]);
 
+  const handleOpenCreateSingleModal = () => {
+    setEditingLicense(null);
+    setIsSingleModalOpen(true);
+  };
+
+  const handleOpenEditSingleModal = (lic: LicenseRecord) => {
+    setEditingLicense({
+      id: lic.id,
+      email: lic.user.email,
+      productId: lic.product.id,
+      type: lic.type,
+      prefix: lic.prefix,
+      deviceLimit: lic.deviceLimit,
+      durationDays: lic.expiryDate
+        ? String(Math.ceil((new Date(lic.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+        : "",
+      customKey: lic.licenseKey,
+      isAutoKey: false,
+      status: lic.status,
+    });
+    setIsSingleModalOpen(true);
+  };
+
+  const handleSaveSingleLicense = async (formData: LicenseFormData) => {
+    setSingleModalLoading(true);
     try {
-      const response = await fetch("/api/licenses", {
+      const isEditing = !!formData.id;
+      const url = isEditing ? `/api/licenses/${formData.id}` : "/api/licenses";
+      const method = isEditing ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success(`License ${isEditing ? "updated" : "created"} successfully!`);
+        setIsSingleModalOpen(false);
+        fetchLicenses();
+      } else {
+        toast.error(data.error || "Failed to save license configuration.");
+      }
+    } catch (err) {
+      toast.error("Error saving license data.");
+    } finally {
+      setSingleModalLoading(false);
+    }
+  };
+
+  const handleGenerateBulkLicenses = async (bulkParams: any) => {
+    try {
+      const res = await fetch("/api/licenses/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          productSlug,
-          type,
-          prefix,
-          deviceLimit: parseInt(deviceLimit) || 1,
-          durationDays: durationDays ? parseInt(durationDays) : undefined,
-        }),
+        body: JSON.stringify(bulkParams),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (response.ok) {
-        setIsModalOpen(false);
-        // Clear form
-        setEmail("");
-        setProductSlug("");
-        setType("TRIAL");
-        setPrefix("BL");
-        setDeviceLimit("1");
-        setDurationDays("");
-        // Reload list
+      if (res.ok && data.licenses) {
         fetchLicenses();
+        return data.licenses;
       } else {
-        alert("Error generating license: " + data.error);
+        toast.error(data.error || "Failed to generate bulk licenses.");
+        return null;
       }
     } catch (err) {
-      alert("Failed to submit request.");
-    } finally {
-      setSubmitting(false);
+      toast.error("Error connecting to bulk license generation API.");
+      return null;
     }
   };
 
-  const handleStatusUpdate = async (licenseId: string, status: string) => {
-    try {
-      const response = await fetch(`/api/licenses/${licenseId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-
-      if (response.ok) {
-        fetchLicenses();
-      } else {
-        const data = await response.json();
-        alert("Failed to update status: " + data.error);
-      }
-    } catch (err) {
-      alert("Error sending request.");
-    }
-  };
-
-  const handleFlushDevices = async (licenseId: string) => {
-    if (!confirm("Are you sure you want to flush all hardware devices bound to this license?")) return;
+  const handleResetDevices = async (licenseId: string, key: string) => {
+    if (!confirm(`Reset registered hardware devices bound to license "${key}"?`)) return;
 
     try {
-      const response = await fetch(`/api/licenses/${licenseId}/devices`, {
+      const res = await fetch(`/api/licenses/${licenseId}/devices`, {
         method: "DELETE",
       });
 
-      if (response.ok) {
+      if (res.ok) {
+        toast.success("Bound hardware devices cleared successfully.");
         fetchLicenses();
-        alert("All hardware devices successfully de-linked from license!");
       } else {
-        const data = await response.json();
-        alert("Failed to flush devices: " + data.error);
+        toast.error("Failed to reset devices.");
       }
     } catch (err) {
-      alert("Error resetting devices.");
+      toast.error("Network error resetting devices.");
     }
   };
 
-  const handleDeleteLicense = async (licenseId: string) => {
-    if (!confirm("Are you sure you want to permanently delete this license key?")) return;
+  const handleDeleteLicense = async (licenseId: string, key: string) => {
+    if (!confirm(`Are you sure you want to revoke/delete license "${key}"?`)) return;
 
     try {
-      const response = await fetch(`/api/licenses/${licenseId}`, {
+      const res = await fetch(`/api/licenses/${licenseId}`, {
         method: "DELETE",
       });
 
-      if (response.ok) {
+      if (res.ok) {
+        toast.success("License revoked and deleted.");
         fetchLicenses();
       } else {
-        const data = await response.json();
-        alert("Failed to delete license: " + data.error);
+        toast.error("Failed to delete license.");
       }
     } catch (err) {
-      alert("Error sending delete request.");
+      toast.error("Error deleting license.");
     }
   };
 
-  // Compute Stats values based on actual database list
-  const totalKeys = licenses.length;
-  const totalDevices = licenses.reduce((sum, item) => sum + (item._count?.devices || 0), 0);
-  const totalSuspended = licenses.filter((l) => l.status === "SUSPENDED").length;
+  const copyLicenseKey = (key: string) => {
+    navigator.clipboard.writeText(key);
+    toast.success(`License key ${key} copied to clipboard!`);
+  };
 
-  const licenseStats = [
-    { title: "Total Licenses", value: totalKeys.toLocaleString(), subtitle: "Active & Trial keys" },
-    { title: "Devices Connected", value: totalDevices.toLocaleString(), subtitle: "Active system nodes" },
-    { title: "Keys Suspended", value: totalSuspended.toLocaleString(), subtitle: "Blacklisted leak attempts" },
-    { title: "Uptime Health", value: "99.99%", subtitle: "Telemetry validation node" },
-  ];
-
-  const filteredLicenses = licenses.filter((l) => {
-    const matchesSearch = 
-      l.licenseKey.toLowerCase().includes(search.toLowerCase()) ||
-      l.user.email.toLowerCase().includes(search.toLowerCase()) ||
-      l.product.name.toLowerCase().includes(search.toLowerCase());
-
-    const matchesStatus = statusFilter === "All" || l.status === statusFilter.toUpperCase();
-
-    return matchesSearch && matchesStatus;
+  const filteredLicenses = licenses.filter((lic) => {
+    const keyMatch = lic.licenseKey.toLowerCase().includes(search.toLowerCase());
+    const userMatch = lic.user.email.toLowerCase().includes(search.toLowerCase());
+    const prodMatch = lic.product.name.toLowerCase().includes(search.toLowerCase());
+    return keyMatch || userMatch || prodMatch;
   });
 
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case "ACTIVE": return "active";
+      case "SUSPENDED": return "warning";
+      case "BLACKLISTED": return "danger";
+      case "EXPIRED": return "neutral";
+      default: return "neutral";
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-8 text-xs relative">
+    <div className="flex flex-col gap-8 text-xs">
       {/* Header controls */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="font-bricolage font-bold text-2xl tracking-tight text-white">License Manager</h2>
-          <p className="text-xs text-muted">Generate, renew, suspend, and monitor active client device hardware signatures.</p>
+          <h2 className="font-bricolage font-bold text-2xl tracking-tight text-white">Licenses Telemetry</h2>
+          <p className="text-xs text-muted">Provision, monitor, and revoke client software keys and device limits in Supabase DB.</p>
         </div>
-        <div className="flex gap-2">
-          <button 
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-cyan" : ""}`} />}
             onClick={fetchLicenses}
-            className="flex items-center gap-2 text-xs font-bold text-white bg-surface border border-border px-4 py-2.5 rounded-sm hover:bg-surface/60 transition-all"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-cyan" : ""}`} />
             Refresh
-          </button>
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 text-xs font-bold text-white bg-gradient-to-tr from-cyan to-violet px-4 py-2.5 rounded-sm shadow-md hover:opacity-90 transition-all"
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Layers className="w-3.5 h-3.5" />}
+            onClick={() => setIsBulkModalOpen(true)}
           >
-            <Plus className="w-4 h-4" />
-            Generate License
-          </button>
+            Bulk License
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Plus className="w-3.5 h-3.5" />}
+            onClick={handleOpenCreateSingleModal}
+          >
+            Issue License
+          </Button>
         </div>
-      </div>
-
-      {/* Mini Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {licenseStats.map((stat, i) => (
-          <GlassCard key={i} hoverable={false} className="py-4 px-6 flex flex-col gap-1.5">
-            <span className="text-[10px] text-muted font-bold uppercase tracking-wider">{stat.title}</span>
-            <span className="text-xl font-bold font-bricolage text-white">{stat.value}</span>
-            <span className="text-[9px] text-muted">{stat.subtitle}</span>
-          </GlassCard>
-        ))}
       </div>
 
       {/* Filter and Search Bar */}
       <GlassCard hoverable={false} className="py-4 px-6 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 border border-border bg-surface2/25 px-3 py-1.5 rounded-sm w-full max-w-sm">
-          <Search className="w-3.5 h-3.5 text-muted" />
-          <input 
-            type="text" 
+        <div className="w-full max-w-sm">
+          <Input
+            placeholder="Search licenses by key, customer email, or product..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search licenses by key, owner email, product..." 
-            className="bg-transparent text-xs text-foreground focus:outline-none w-full placeholder:text-muted/60"
+            leftIcon={<Search className="w-3.5 h-3.5 text-muted" />}
           />
         </div>
         <div className="flex gap-2">
-          {["All", "Active", "Suspended", "Expired"].map((statFilter, idx) => (
-            <button 
-              key={idx} 
-              onClick={() => setStatusFilter(statFilter)}
+          {["ALL", "ACTIVE", "SUSPENDED", "BLACKLISTED", "EXPIRED"].map((status, idx) => (
+            <button
+              key={idx}
+              onClick={() => setStatusFilter(status)}
               className={`text-[10px] font-bold px-3 py-1.5 rounded-sm border transition-all ${
-                statusFilter === statFilter 
-                  ? "bg-surface border-border-active text-cyan" 
-                  : "bg-surface2/20 border-border text-muted hover:text-foreground hover:bg-surface/30"
+                statusFilter === status
+                  ? "bg-surface border-border-active text-violet"
+                  : "bg-surface2/20 border-border text-muted hover:text-foreground"
               }`}
             >
-              {statFilter}
+              {status}
             </button>
           ))}
         </div>
       </GlassCard>
 
-      {/* License table */}
+      {/* Licenses Data Table */}
       <GlassCard className="flex flex-col gap-4">
         {loading && licenses.length === 0 ? (
-          <div className="text-center py-8 text-muted">Loading license database...</div>
+          <div className="text-center py-12 text-muted">Loading active licenses database...</div>
         ) : error ? (
-          <div className="text-center py-8 text-red font-semibold">{error}</div>
+          <div className="text-center py-12 text-red font-semibold">{error}</div>
         ) : filteredLicenses.length === 0 ? (
-          <div className="text-center py-8 text-muted">No licenses found in registry matching filters.</div>
+          <div className="text-center py-12 text-muted flex flex-col items-center justify-center gap-2">
+            <Key className="w-8 h-8 text-muted/50" />
+            <span>No license keys matching current filter criteria.</span>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-border text-muted font-bold text-[10px] uppercase tracking-wider">
                   <th className="py-3 px-4">License Key</th>
-                  <th className="py-3">Owner Email</th>
-                  <th className="py-3">Associated Product</th>
-                  <th className="py-3">Plan Details</th>
-                  <th className="py-3">Devices Bound</th>
-                  <th className="py-3">Last Active Call</th>
+                  <th className="py-3">Customer Email</th>
+                  <th className="py-3">Product Name</th>
+                  <th className="py-3">Type</th>
                   <th className="py-3">Status</th>
+                  <th className="py-3">Devices Bound</th>
+                  <th className="py-3">Expiry Date</th>
                   <th className="py-3 text-right pr-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredLicenses.map((l, idx) => (
-                  <tr key={idx} className="border-b border-border last:border-0 hover:bg-surface/20 transition-all">
-                    <td className="py-4 px-4 font-mono font-bold text-cyan text-[11px]">{l.licenseKey}</td>
-                    <td className="py-4 text-muted">{l.user.email}</td>
-                    <td className="py-4 text-white font-semibold">{l.product.name}</td>
-                    <td className="py-4 text-muted">{l.type}</td>
-                    <td className="py-4 font-mono font-bold text-[11px] text-white">
-                      <div className="flex items-center gap-1.5">
-                        <Monitor className="w-3.5 h-3.5 text-muted" />
-                        {l._count?.devices || 0} / {l.deviceLimit}
-                      </div>
-                    </td>
-                    <td className="py-4 text-muted">
-                      {l.lastActiveAt ? new Date(l.lastActiveAt).toLocaleString() : "Never active"}
-                    </td>
-                    <td className="py-4">
-                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-sm border ${
-                        l.status === "ACTIVE" 
-                          ? "bg-green/10 border-green/20 text-green" 
-                          : l.status === "SUSPENDED" 
-                          ? "bg-red/10 border-red/20 text-red" 
-                          : "bg-muted/10 border-border text-muted"
-                      }`}>
-                        {l.status}
-                      </span>
-                    </td>
-                    <td className="py-4 text-right pr-4">
-                      <div className="flex justify-end gap-2 text-muted">
-                        <button 
-                          onClick={() => handleFlushDevices(l.id)}
-                          className="p-1 hover:text-cyan border border-transparent hover:border-cyan/10 rounded-sm hover:bg-cyan/5 transition-all" 
-                          title="Reset devices (flush logs)"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        </button>
-                        {l.status === "ACTIVE" ? (
-                          <button 
-                            onClick={() => handleStatusUpdate(l.id, "SUSPENDED")}
-                            className="p-1 hover:text-red border border-transparent hover:border-red/10 rounded-sm hover:bg-red/5 transition-all" 
-                            title="Suspend Key"
+                {filteredLicenses.map((lic, idx) => {
+                  const deviceCount = lic.devices ? lic.devices.length : lic._count?.devices || 0;
+                  return (
+                    <tr key={idx} className="border-b border-border last:border-0 hover:bg-surface/20 transition-all">
+                      <td className="py-4 px-4 font-mono font-bold text-cyan text-[11px]">
+                        <div className="flex items-center gap-1.5">
+                          <span>{lic.licenseKey}</span>
+                          <button
+                            onClick={() => copyLicenseKey(lic.licenseKey)}
+                            className="p-1 text-muted hover:text-white transition-all"
+                            title="Copy Key"
                           >
-                            <Ban className="w-3.5 h-3.5" />
+                            <Copy className="w-3 h-3" />
                           </button>
-                        ) : (
-                          <button 
-                            onClick={() => handleStatusUpdate(l.id, "ACTIVE")}
-                            className="px-2 py-0.5 bg-green/10 border border-green/20 text-green rounded-sm font-bold text-[9px]" 
-                            title="Reactivate Key"
+                        </div>
+                      </td>
+                      <td className="py-4 text-white font-semibold">{lic.user?.email || "Unknown User"}</td>
+                      <td className="py-4 text-violet font-semibold">{lic.product?.name || "Product"}</td>
+                      <td className="py-4 font-bold text-[10px] text-muted">{lic.type}</td>
+                      <td className="py-4">
+                        <Badge variant={getStatusVariant(lic.status)}>{lic.status}</Badge>
+                      </td>
+                      <td className="py-4">
+                        <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                          <Smartphone className="w-3.5 h-3.5 text-muted" />
+                          <span className={deviceCount >= lic.deviceLimit ? "text-gold font-bold" : "text-foreground"}>
+                            {deviceCount} / {lic.deviceLimit}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 text-muted text-[10px]">
+                        {lic.expiryDate ? new Date(lic.expiryDate).toLocaleDateString() : "Lifetime"}
+                      </td>
+                      <td className="py-4 text-right pr-4">
+                        <div className="flex justify-end gap-2 text-muted">
+                          <button
+                            onClick={() => handleResetDevices(lic.id, lic.licenseKey)}
+                            className="p-1 hover:text-gold transition-all"
+                            title="Reset Bound Hardware Devices"
                           >
-                            Activate
+                            <Smartphone className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                        <button 
-                          onClick={() => handleDeleteLicense(l.id)}
-                          className="p-1 hover:text-red border border-transparent hover:border-red/10 rounded-sm hover:bg-red/5 transition-all" 
-                          title="Hard Delete Key"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          <button
+                            onClick={() => handleOpenEditSingleModal(lic)}
+                            className="p-1 hover:text-cyan transition-all"
+                            title="Edit License Configuration"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLicense(lic.id, lic.licenseKey)}
+                            className="p-1 hover:text-red transition-all"
+                            title="Revoke License"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </GlassCard>
 
-      {/* Modal Dialog Form for License Generation */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <GlassCard hoverable={false} className="w-full max-w-md flex flex-col gap-5 p-8">
-            <div className="flex justify-between items-center border-b border-border pb-3">
-              <div>
-                <h3 className="font-bricolage font-bold text-base text-white">Generate Client License Key</h3>
-                <p className="text-[10px] text-muted">Provision a cryptographic key bound to a client email.</p>
-              </div>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="text-muted hover:text-white p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Manual / Single License Modal */}
+      <LicenseModal
+        isOpen={isSingleModalOpen}
+        onClose={() => setIsSingleModalOpen(false)}
+        onSave={handleSaveSingleLicense}
+        products={products}
+        initialData={editingLicense}
+        loading={singleModalLoading}
+      />
 
-            <form onSubmit={handleGenerateLicense} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-muted font-bold text-[9px] uppercase">Registered Customer Email</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="customer@domain.com"
-                  className="bg-surface2/40 border border-border rounded-sm py-2 px-3 text-foreground focus:outline-none focus:border-border-active transition-all"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-muted font-bold text-[9px] uppercase">Target Product Slug</label>
-                <input
-                  type="text"
-                  required
-                  value={productSlug}
-                  onChange={(e) => setProductSlug(e.target.value)}
-                  placeholder="joypanda"
-                  className="bg-surface2/40 border border-border rounded-sm py-2 px-3 text-foreground focus:outline-none focus:border-border-active transition-all font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-muted font-bold text-[9px] uppercase">License Plan</label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                    className="bg-surface2/40 border border-border rounded-sm py-2 px-3 text-foreground focus:outline-none focus:border-border-active transition-all"
-                  >
-                    <option value="FREE">Free Tier</option>
-                    <option value="TRIAL">Trial Mode</option>
-                    <option value="MONTHLY">Monthly Billing</option>
-                    <option value="YEARLY">Yearly Billing</option>
-                    <option value="LIFETIME">Lifetime Plan</option>
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-muted font-bold text-[9px] uppercase">Key Prefix</label>
-                  <input
-                    type="text"
-                    required
-                    value={prefix}
-                    onChange={(e) => setPrefix(e.target.value)}
-                    placeholder="BL"
-                    maxLength={10}
-                    className="bg-surface2/40 border border-border rounded-sm py-2 px-3 text-foreground focus:outline-none focus:border-border-active transition-all font-mono uppercase"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-muted font-bold text-[9px] uppercase">Max Devices Limit</label>
-                  <input
-                    type="number"
-                    required
-                    value={deviceLimit}
-                    onChange={(e) => setDeviceLimit(e.target.value)}
-                    min={1}
-                    className="bg-surface2/40 border border-border rounded-sm py-2 px-3 text-foreground focus:outline-none focus:border-border-active transition-all"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-muted font-bold text-[9px] uppercase">Duration (Days - Optional)</label>
-                  <input
-                    type="number"
-                    value={durationDays}
-                    onChange={(e) => setDurationDays(e.target.value)}
-                    placeholder="30"
-                    min={1}
-                    className="bg-surface2/40 border border-border rounded-sm py-2 px-3 text-foreground focus:outline-none focus:border-border-active transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-4 border-t border-border pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-border text-muted hover:text-white rounded-sm transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-6 py-2 text-white bg-gradient-to-tr from-cyan to-violet hover:opacity-90 rounded-sm font-bold shadow-md transition-all disabled:opacity-50"
-                >
-                  {submitting ? "Generating..." : "Generate Key"}
-                </button>
-              </div>
-            </form>
-          </GlassCard>
-        </div>
-      )}
+      {/* Bulk License Modal */}
+      <BulkLicenseModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        products={products}
+        onGenerate={handleGenerateBulkLicenses}
+      />
     </div>
   );
 }

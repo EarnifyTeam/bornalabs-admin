@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { ReleaseService } from "@/services/release.service";
 
 /**
- * DELETE: Remove a release listing by ID
+ * DELETE: Remove/rollback a release build by ID
  */
 export async function DELETE(
   request: Request,
@@ -11,11 +11,8 @@ export async function DELETE(
   try {
     const { id } = params;
 
-    await prisma.release.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({ success: true, message: "RELEASE_DELETED_OR_ROLLED_BACK" });
+    await ReleaseService.deleteRelease(id);
+    return NextResponse.json({ success: true, message: "RELEASE_DELETED" });
   } catch (error) {
     return NextResponse.json(
       { error: "INTERNAL_SERVER_ERROR" },

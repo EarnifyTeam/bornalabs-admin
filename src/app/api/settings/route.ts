@@ -1,14 +1,28 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { SettingService } from "@/services/setting.service";
 
 /**
- * GET: Retrieve all system configuration settings
+ * GET: Fetch all setting records or settings key-value map
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const settings = await prisma.setting.findMany();
-    return NextResponse.json({ success: true, settings });
+    const { searchParams } = new URL(request.url);
+    const category = searchParams.get("category");
+
+    const whereClause = category ? { category } : {};
+    const settings = await prisma.setting.findMany({
+      where: whereClause,
+    });
+
+    const settingsMap: Record<string, string> = {};
+    for (const s of settings) {
+      settingsMap[s.key] = s.value;
+    }
+
+    return NextResponse.json({ success: true, settings, settingsMap });
   } catch (error) {
+    console.error("GET /api/settings Error:", error);
     return NextResponse.json(
       { error: "INTERNAL_SERVER_ERROR" },
       { status: 500 }
@@ -17,12 +31,12 @@ export async function GET() {
 }
 
 /**
- * POST: Bulk upsert/save system configurations [Admin only]
+ * POST: Save or update settings list in database transaction
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { settings } = body; // Array of { key: string, value: string, category: string }
+    const { settings } = body; // Expects array of { key, value, category }
 
     if (!settings || !Array.isArray(settings)) {
       return NextResponse.json(
@@ -31,18 +45,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const upsertPromises = settings.map((item) =>
-      prisma.setting.upsert({
-        where: { key: item.key },
-        update: { value: item.value, category: item.category },
-        create: { key: item.key, value: item.value, category: item.category },
-      })
-    );
-
-    const savedSettings = await Promise.all(upsertPromises);
-
-    return NextResponse.json({ success: true, settings: savedSettings });
+    await SettingService.setMany(settings);
+    return NextResponse.json({ success: true, message: "SETTINGS_UPDATED" });
   } catch (error) {
+    console.error("POST /api/settings Error:", error);
     return NextResponse.json(
       { error: "INTERNAL_SERVER_ERROR" },
       { status: 500 }

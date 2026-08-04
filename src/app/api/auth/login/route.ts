@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
   try {
@@ -32,8 +33,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Simple placeholder verification logic (actual builds would use bcrypt verifications)
-    const passwordMatch = user.passwordHash === password;
+    // Verify password using bcryptjs
+    const passwordMatch = await bcrypt.compare(password, user.passwordHash);
     if (!passwordMatch) {
       return NextResponse.json(
         { error: "INVALID_CREDENTIALS" },
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
     return response;
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || "INTERNAL_SERVER_ERROR", stack: error.stack },
+      { error: "INTERNAL_SERVER_ERROR" },
       { status: 500 }
     );
   }

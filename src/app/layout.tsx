@@ -1,9 +1,13 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { ToastProvider } from "@/components/toast";
+import { ThemeProvider } from "@/providers/theme-provider";
+import { AuthProvider } from "@/providers/auth-provider";
+import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
-  title: "BornaLabs SaaS Admin Console",
-  description: "Administrative control center for BornaLabs software, extensions, and licenses telemetry.",
+  title: siteConfig.name,
+  description: siteConfig.description,
 };
 
 export default function RootLayout({
@@ -16,10 +20,17 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Outfit:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body>
-        {children}
+        <ThemeProvider>
+          <AuthProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { GlassCard } from "@/components/glass-card";
+import { GlassCard } from "@/components/ui/glass-card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/toast";
 import { 
   Users, 
   Search, 
@@ -9,38 +13,55 @@ import {
   ShieldAlert, 
   UserMinus, 
   Check, 
-  X,
-  Lock,
+  RefreshCw, 
+  Award,
   Edit2,
-  RefreshCw,
-  Award
+  Trash2,
+  AlertCircle
 } from "lucide-react";
+import { UserModal, type UserFormData } from "@/components/users/user-modal";
 
 interface Profile {
   fullName: string;
+  phone?: string | null;
 }
 
 interface UserData {
   id: string;
   email: string;
   role: string;
-  status: string;
+  status: "ACTIVE" | "SUSPENDED" | "BANNED";
   premiumStatus: boolean;
   notes: string | null;
   profile: Profile | null;
+  _count?: {
+    licenses: number;
+    orders: number;
+  };
 }
 
 export default function UsersPage() {
+  const toast = useToast();
   const [users, setUsers] = useState<UserData[]>([]);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserFormData | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+
   const fetchUsers = async () => {
     setLoading(true);
+    setError("");
     try {
-      const response = await fetch("/api/users");
+      let url = "/api/users";
+      if (roleFilter !== "All") {
+        url += `?role=${roleFilter.toUpperCase().replace(" ", "_")}`;
+      }
+      const response = await fetch(url);
       const data = await response.json();
       if (response.ok) {
         setUsers(data.users || []);
@@ -56,7 +77,55 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [roleFilter]);
+
+  const handleOpenCreateModal = () => {
+    setEditingUser(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (u: UserData) => {
+    setEditingUser({
+      id: u.id,
+      fullName: u.profile?.fullName || "BornaLabs User",
+      email: u.email,
+      role: u.role,
+      status: u.status,
+      premiumStatus: u.premiumStatus,
+      phone: u.profile?.phone || "",
+      notes: u.notes || "",
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSaveUser = async (formData: UserFormData) => {
+    setModalLoading(true);
+    try {
+      const isEditing = !!formData.id;
+      const url = isEditing ? `/api/users/${formData.id}` : "/api/users";
+      const method = isEditing ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success(`User account ${isEditing ? "updated" : "created"} successfully!`);
+        setIsModalOpen(false);
+        fetchUsers();
+      } else {
+        toast.error(data.error || "Failed to save user account.");
+      }
+    } catch (err) {
+      toast.error("Error saving user data.");
+    } finally {
+      setModalLoading(false);
+    }
+  };
 
   const updateUserStatus = async (userId: string, status: string) => {
     try {
@@ -66,13 +135,13 @@ export default function UsersPage() {
         body: JSON.stringify({ status }),
       });
       if (response.ok) {
-        // Refetch users to update view
+        toast.success(`User account status updated to ${status}.`);
         fetchUsers();
       } else {
-        alert("Failed to update user status.");
+        toast.error("Failed to update user status.");
       }
     } catch (err) {
-      alert("Error sending update request.");
+      toast.error("Error sending status update request.");
     }
   };
 
@@ -84,12 +153,32 @@ export default function UsersPage() {
         body: JSON.stringify({ premiumStatus: !currentPremium }),
       });
       if (response.ok) {
+        toast.success(`User premium tier status ${!currentPremium ? "assigned" : "revoked"}.`);
         fetchUsers();
       } else {
-        alert("Failed to toggle premium status.");
+        toast.error("Failed to toggle premium status.");
       }
     } catch (err) {
-      alert("Error sending update request.");
+      toast.error("Error sending premium update request.");
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, email: string) => {
+    if (!confirm(`Are you sure you want to delete user account "${email}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        toast.success(`User account "${email}" deleted.`);
+        fetchUsers();
+      } else {
+        toast.error("Failed to delete user account.");
+      }
+    } catch (err) {
+      toast.error("Error deleting user.");
     }
   };
 
@@ -100,10 +189,17 @@ export default function UsersPage() {
       u.email.toLowerCase().includes(search.toLowerCase()) ||
       (u.notes && u.notes.toLowerCase().includes(search.toLowerCase()));
 
-    const matchesRole = roleFilter === "All" || u.role === roleFilter.toUpperCase().replace(" ", "_");
-
-    return matchesSearch && matchesRole;
+    return matchesSearch;
   });
+
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case "ACTIVE": return "active";
+      case "SUSPENDED": return "warning";
+      case "BANNED": return "danger";
+      default: return "neutral";
+    }
+  };
 
   return (
     <div className="flex flex-col gap-8 text-xs">
@@ -111,27 +207,36 @@ export default function UsersPage() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="font-bricolage font-bold text-2xl tracking-tight text-white">User Operations</h2>
-          <p className="text-xs text-muted">Create, suspend, ban users, assign premium statuses, and adjust role access logs.</p>
+          <p className="text-xs text-muted">Create, suspend, ban users, assign premium statuses, and adjust role access logs in Supabase DB.</p>
         </div>
-        <button 
-          onClick={fetchUsers}
-          className="flex items-center gap-2 text-xs font-bold text-white bg-surface border border-border px-4 py-2.5 rounded-sm shadow-md hover:bg-surface/60 transition-all"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-cyan" : ""}`} />
-          Reload User List
-        </button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-cyan" : ""}`} />}
+            onClick={fetchUsers}
+          >
+            Reload List
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Plus className="w-3.5 h-3.5" />}
+            onClick={handleOpenCreateModal}
+          >
+            New User
+          </Button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
       <GlassCard hoverable={false} className="py-4 px-6 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 border border-border bg-surface2/25 px-3 py-1.5 rounded-sm w-full max-w-sm">
-          <Search className="w-3.5 h-3.5 text-muted" />
-          <input 
-            type="text" 
+        <div className="w-full max-w-sm">
+          <Input
+            placeholder="Search users by name, email address, notes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search users by name, email address, notes..." 
-            className="bg-transparent text-xs text-foreground focus:outline-none w-full placeholder:text-muted/60"
+            leftIcon={<Search className="w-3.5 h-3.5 text-muted" />}
           />
         </div>
         <div className="flex gap-2">
@@ -154,11 +259,14 @@ export default function UsersPage() {
       {/* Users list table */}
       <GlassCard className="flex flex-col gap-4">
         {loading && users.length === 0 ? (
-          <div className="text-center py-8 text-muted">Loading user accounts...</div>
+          <div className="text-center py-12 text-muted">Loading user accounts database...</div>
         ) : error ? (
-          <div className="text-center py-8 text-red font-semibold">{error}</div>
+          <div className="text-center py-12 text-red font-semibold">{error}</div>
         ) : filteredUsers.length === 0 ? (
-          <div className="text-center py-8 text-muted">No users matching current filters found.</div>
+          <div className="text-center py-12 text-muted flex flex-col items-center justify-center gap-2">
+            <Users className="w-8 h-8 text-muted/50" />
+            <span>No user accounts matching current filter criteria.</span>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
@@ -196,15 +304,7 @@ export default function UsersPage() {
                         </button>
                       </td>
                       <td className="py-4">
-                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-sm border ${
-                          u.status === "ACTIVE" 
-                            ? "bg-green/10 border-green/20 text-green" 
-                            : u.status === "SUSPENDED" 
-                            ? "bg-gold/10 border-gold/20 text-gold" 
-                            : "bg-red/10 border-red/20 text-red"
-                        }`}>
-                          {u.status}
-                        </span>
+                        <Badge variant={getStatusVariant(u.status)}>{u.status}</Badge>
                       </td>
                       <td className="py-4 text-muted text-[11px] max-w-xs truncate">{u.notes || "No notes saved."}</td>
                       <td className="py-4 text-right pr-4">
@@ -236,6 +336,20 @@ export default function UsersPage() {
                               </button>
                             </>
                           )}
+                          <button
+                            onClick={() => handleOpenEditModal(u)}
+                            className="p-1 hover:text-cyan transition-all"
+                            title="Edit User Profile"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(u.id, u.email)}
+                            className="p-1 hover:text-red transition-all"
+                            title="Delete User"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -246,6 +360,15 @@ export default function UsersPage() {
           </div>
         )}
       </GlassCard>
+
+      {/* User Modal */}
+      <UserModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveUser}
+        initialData={editingUser}
+        loading={modalLoading}
+      />
     </div>
   );
 }

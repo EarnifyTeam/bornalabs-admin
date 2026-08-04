@@ -60,6 +60,9 @@ jspm_packages/
 *.tsbuildinfo
 next-env.d.ts
 
+# Sub-projects or scratch
+bornalabs-admin/
+
 # User-specific files
 .idea/
 .vscode/

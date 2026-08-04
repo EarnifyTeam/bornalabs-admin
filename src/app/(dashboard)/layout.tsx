@@ -1,10 +1,26 @@
-import { Sidebar } from "@/components/sidebar";
+import React from "react";
+import { redirect } from "next/navigation";
+import { Sidebar } from "@/components/layout/sidebar";
+import { Header } from "@/components/layout/header";
+import { createClient } from "@/lib/supabase/server";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  // Check server-side Supabase authentication if credentials configured
+  if (supabaseUrl && !supabaseUrl.includes("placeholder")) {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect("/login");
+    }
+  }
+
   return (
     <div className="min-h-screen bg-bg text-foreground relative flex">
       {/* Background aurora blurs */}
@@ -17,18 +33,7 @@ export default function DashboardLayout({
 
       {/* Main Content Area */}
       <div className="flex-1 pl-64 relative z-10 flex flex-col min-h-screen">
-        <header className="h-16 border-b border-border flex items-center justify-between px-8 bg-bg2/45 backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] bg-cyan/10 border border-cyan/20 text-cyan px-2 py-0.5 rounded-sm font-semibold uppercase tracking-wider">
-              Control Center
-            </span>
-            <span className="text-[10px] text-muted">• Production Mode</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-[11px] text-muted">System Time: {new Date().toLocaleDateString()}</span>
-            <div className="w-2.5 h-2.5 rounded-full bg-green pulse-green" title="Services fully operational"></div>
-          </div>
-        </header>
+        <Header />
 
         <main className="flex-1 p-8 overflow-y-auto max-w-7xl w-full mx-auto">
           {children}
