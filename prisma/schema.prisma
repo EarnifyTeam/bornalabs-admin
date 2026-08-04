@@ -79,8 +79,22 @@ enum ReleaseFileType {
   EXE
   MSI
   DMG
+  APPIMAGE
   DEB
   RPM
+  APK
+  PDF
+}
+
+enum Platform {
+  WINDOWS
+  MACOS
+  LINUX
+  CHROME
+  EDGE
+  BRAVE
+  OPERA
+  UNIVERSAL
 }
 
 enum OrderStatus {
@@ -198,11 +212,17 @@ model Release {
   id                String          @id @default(uuid())
   productId         String
   version           String
+  fileName          String?
+  fileUrl           String
+  storagePath       String?
+  fileType          ReleaseFileType
+  platform          Platform        @default(UNIVERSAL)
+  fileSize          BigInt?
+  checksum          String?
   releaseNotes      String
   isForceUpdate     Boolean         @default(false)
-  fileUrl           String
-  fileType          ReleaseFileType
-  supportedBrowsers String[]
+  isLatest          Boolean         @default(true)
+  supportedBrowsers String[]        @default([])
   createdAt         DateTime        @default(now())
   product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
   downloads         Download[]

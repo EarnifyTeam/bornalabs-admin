@@ -12,7 +12,8 @@ export type ProductCategory = "AI_TOOL" | "CHROME_EXTENSION" | "DESKTOP_SOFTWARE
 export type ProductStatus = "DRAFT" | "COMING_SOON" | "BETA" | "LIVE" | "DEPRECATED";
 export type LicenseType = "TRIAL" | "MONTHLY" | "QUARTERLY" | "YEARLY" | "LIFETIME" | "CUSTOM";
 export type LicenseStatus = "ACTIVE" | "INACTIVE" | "EXPIRED" | "SUSPENDED" | "REVOKED";
-export type ReleaseFileType = "ZIP" | "CRX" | "EXE" | "MSI" | "DMG" | "DEB" | "RPM";
+export type ReleaseFileType = "ZIP" | "CRX" | "EXE" | "MSI" | "DMG" | "APPIMAGE" | "DEB" | "RPM" | "APK" | "PDF";
+export type Platform = "WINDOWS" | "MACOS" | "LINUX" | "CHROME" | "EDGE" | "BRAVE" | "OPERA" | "UNIVERSAL";
 
 export interface Database {
   public: {
@@ -156,6 +157,56 @@ export interface Database {
           updatedAt?: string;
         };
       };
+      Release: {
+        Row: {
+          id: string;
+          productId: string;
+          version: string;
+          fileName: string | null;
+          fileUrl: string;
+          storagePath: string | null;
+          fileType: ReleaseFileType;
+          platform: Platform;
+          fileSize: number | null;
+          checksum: string | null;
+          releaseNotes: string;
+          isForceUpdate: boolean;
+          isLatest: boolean;
+          supportedBrowsers: string[];
+          createdAt: string;
+        };
+        Insert: {
+          id?: string;
+          productId: string;
+          version: string;
+          fileName?: string | null;
+          fileUrl: string;
+          storagePath?: string | null;
+          fileType: ReleaseFileType;
+          platform?: Platform;
+          fileSize?: number | null;
+          checksum?: string | null;
+          releaseNotes: string;
+          isForceUpdate?: boolean;
+          isLatest?: boolean;
+          supportedBrowsers?: string[];
+          createdAt?: string;
+        };
+        Update: {
+          version?: string;
+          fileName?: string | null;
+          fileUrl?: string;
+          storagePath?: string | null;
+          fileType?: ReleaseFileType;
+          platform?: Platform;
+          fileSize?: number | null;
+          checksum?: string | null;
+          releaseNotes?: string;
+          isForceUpdate?: boolean;
+          isLatest?: boolean;
+          supportedBrowsers?: string[];
+        };
+      };
       License: {
         Row: {
           id: string;
@@ -204,6 +255,33 @@ export interface Database {
           updatedAt?: string;
         };
       };
+      Download: {
+        Row: {
+          id: string;
+          productId: string;
+          releaseId: string | null;
+          userId: string | null;
+          ipAddress: string | null;
+          userAgent: string | null;
+          createdAt: string;
+        };
+        Insert: {
+          id?: string;
+          productId: string;
+          releaseId?: string | null;
+          userId?: string | null;
+          ipAddress?: string | null;
+          userAgent?: string | null;
+          createdAt?: string;
+        };
+        Update: {
+          productId?: string;
+          releaseId?: string | null;
+          userId?: string | null;
+          ipAddress?: string | null;
+          userAgent?: string | null;
+        };
+      };
       Setting: {
         Row: {
           key: string;
@@ -240,6 +318,7 @@ export interface Database {
       LicenseType: LicenseType;
       LicenseStatus: LicenseStatus;
       ReleaseFileType: ReleaseFileType;
+      Platform: Platform;
     };
   };
 }

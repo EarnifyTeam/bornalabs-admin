@@ -2,41 +2,62 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
 /**
- * GET: Retrieve global download telemetry logs
+ * GET: Download statistics summary and log list
  */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get("productId");
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const skip = (page - 1) * limit;
 
-    const whereClause: any = {};
-    if (productId) whereClause.productId = productId;
+    const where: any = {};
+    if (productId && productId !== "ALL") {
+      where.productId = productId;
+    }
 
-    const downloads = await prisma.download.findMany({
-      where: whereClause,
-      include: {
-        product: true,
-        release: true,
-        user: { include: { profile: true } },
+    const [downloads, total, totalReleases] = await Promise.all([
+      prisma.download.findMany({
+        where,
+        include: {
+          product: { select: { id: true, name: true } },
+          release: { select: { id: true, version: true, fileName: true } },
+          user: { select: { id: true, email: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.download.count({ where }),
+      prisma.release.count(),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      downloads,
+      stats: {
+        totalDownloads: total,
+        totalReleases,
       },
-      orderBy: {
-        createdAt: "desc",
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-      take: 50,
     });
-
-    return NextResponse.json({ success: true, downloads });
-  } catch (error) {
+  } catch (error: any) {
     console.error("GET /api/downloads Error:", error);
     return NextResponse.json(
-      { error: "INTERNAL_SERVER_ERROR" },
+      { error: "INTERNAL_SERVER_ERROR", message: error.message },
       { status: 500 }
     );
   }
 }
 
 /**
- * POST: Record a new download event
+ * POST: Record download event
  */
 export async function POST(request: Request) {
   try {
@@ -55,20 +76,16 @@ export async function POST(request: Request) {
         productId,
         releaseId: releaseId || null,
         userId: userId || null,
-        ipAddress: ipAddress || "127.0.0.1",
-        userAgent: userAgent || "BornaLabs Client",
-      },
-      include: {
-        product: true,
-        release: true,
+        ipAddress: ipAddress || null,
+        userAgent: userAgent || null,
       },
     });
 
     return NextResponse.json({ success: true, download }, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("POST /api/downloads Error:", error);
     return NextResponse.json(
-      { error: "INTERNAL_SERVER_ERROR" },
+      { error: "INTERNAL_SERVER_ERROR", message: error.message },
       { status: 500 }
     );
   }
