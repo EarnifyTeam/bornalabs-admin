@@ -27,10 +27,27 @@ export default function LoginPage() {
 
     try {
       // 1. Try Supabase Auth first
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      let { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+
+      // 2. Auto-provision in Supabase Cloud Auth if master admin login fails
+      if (authError && email.toLowerCase().trim() === "kumarsuraj0469@gmail.com") {
+        const provisionRes = await fetch("/api/auth/provision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }).catch(() => null);
+
+        if (provisionRes && provisionRes.ok) {
+          const retry = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          authError = retry.error;
+        }
+      }
 
       if (!authError) {
         router.push("/");
@@ -38,7 +55,7 @@ export default function LoginPage() {
         return;
       }
 
-      // 2. Fallback to Internal Prisma API Authentication
+      // 3. Fallback to Internal Prisma API Authentication
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -49,12 +66,7 @@ export default function LoginPage() {
         router.push("/");
         router.refresh();
       } else {
-        const data = await res.json().catch(() => ({}));
-        setError(
-          data.error === "INVALID_CREDENTIALS"
-            ? "Invalid email or password."
-            : authError.message || "Failed to authenticate session."
-        );
+        setError(authError?.message || "Invalid email or password.");
       }
     } catch (err: any) {
       setError("Connection error to authentication server.");
