@@ -53,7 +53,7 @@ export default function SupabaseStatusPage() {
             <h2 className="font-bricolage font-bold text-xl text-white">Supabase Connection Diagnostics</h2>
             <Badge variant="warning">[DEVELOPMENT ONLY]</Badge>
           </div>
-          <p className="text-xs text-muted">Phase 2A Live Network Handshake Verification for `.env.local` Supabase URL.</p>
+          <p className="text-xs text-muted">Phase 2A Live Network Handshake Verification for Supabase URL.</p>
         </div>
 
         <Button
@@ -122,7 +122,7 @@ export default function SupabaseStatusPage() {
             </div>
 
             <p className="text-[11px] text-muted">
-              Please verify that <code className="text-white">NEXT_PUBLIC_SUPABASE_URL</code> and <code className="text-white">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> are correctly set in your <code className="text-white">.env.local</code> file.
+              Please verify that <code className="text-white">NEXT_PUBLIC_SUPABASE_URL</code> and <code className="text-white">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> are correctly set in environment variables.
             </p>
           </div>
         )}

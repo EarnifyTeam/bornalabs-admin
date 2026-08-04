@@ -15,7 +15,7 @@ export async function GET() {
         {
           status: "ERROR",
           connected: false,
-          error: "Supabase environment variables missing or unconfigured in .env.local",
+          error: "Supabase environment variables missing or unconfigured.",
           missingKeys: [
             !supabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL" : "",
             !supabaseAnonKey ? "NEXT_PUBLIC_SUPABASE_ANON_KEY" : "",

@@ -134,7 +134,7 @@ export default function LoginPage() {
                   <li key={key}>{key}</li>
                 ))}
               </ul>
-              <p className="mt-1 text-[9px] text-muted">Configure keys in <code className="text-white">.env.local</code> file.</p>
+              <p className="mt-1 text-[9px] text-muted">Configure keys in environment variables.</p>
             </div>
           </div>
         )}

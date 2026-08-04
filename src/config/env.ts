@@ -1,7 +1,13 @@
 export const envConfig = {
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-  supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+  get supabaseUrl() {
+    return process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  },
+  get supabaseAnonKey() {
+    return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  },
+  get supabaseServiceKey() {
+    return process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  },
 };
 
 export interface EnvValidationResult {
@@ -13,20 +19,23 @@ export interface EnvValidationResult {
 export function validateSupabaseConfig(): EnvValidationResult {
   const missingKeys: string[] = [];
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || envConfig.supabaseUrl;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || envConfig.supabaseAnonKey;
+
   if (
-    !envConfig.supabaseUrl ||
-    envConfig.supabaseUrl.includes("your-project-id") ||
-    envConfig.supabaseUrl.includes("YOUR_PROJECT") ||
-    envConfig.supabaseUrl.includes("placeholder")
+    !url ||
+    url.includes("your-project-id") ||
+    url.includes("YOUR_PROJECT") ||
+    url.includes("placeholder")
   ) {
     missingKeys.push("NEXT_PUBLIC_SUPABASE_URL");
   }
 
   if (
-    !envConfig.supabaseAnonKey ||
-    envConfig.supabaseAnonKey.includes("your-supabase-anon-key") ||
-    envConfig.supabaseAnonKey.includes("YOUR_ANON_KEY") ||
-    envConfig.supabaseAnonKey.includes("placeholder")
+    !anonKey ||
+    anonKey.includes("your-supabase-anon-key") ||
+    anonKey.includes("YOUR_ANON_KEY") ||
+    anonKey.includes("placeholder")
   ) {
     missingKeys.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
@@ -38,6 +47,6 @@ export function validateSupabaseConfig(): EnvValidationResult {
     missingKeys,
     errorMessage: isValid
       ? undefined
-      : `[Supabase Config Error] Missing or unconfigured environment variables: ${missingKeys.join(", ")}. Please configure them in your .env or .env.local file.`,
+      : `[Supabase Config Error] Missing or unconfigured environment variables: ${missingKeys.join(", ")}. Please configure environment variables.`,
   };
 }
