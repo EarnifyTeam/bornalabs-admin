@@ -14,6 +14,13 @@ export async function POST(request: Request) {
       );
     }
 
+    // Ensure User table schema columns exist before querying
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastLoginAt" TIMESTAMP(3);
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "premiumStatus" BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "notes" TEXT;
+    `).catch(() => {});
+
     // Query administrative accounts
     let user = await prisma.user.findUnique({
       where: { email },
