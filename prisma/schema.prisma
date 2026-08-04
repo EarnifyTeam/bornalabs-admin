@@ -1,0 +1,308 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  SUPPORT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum ProductCategory {
+  AI_TOOL
+  CHROME_EXTENSION
+  DESKTOP_SOFTWARE
+  AUTOMATION
+  API
+  FUTURE_PRODUCT
+}
+
+enum ProductStatus {
+  LIVE
+  BETA
+  COMING_SOON
+  DEPRECATED
+}
+
+enum LicenseType {
+  FREE
+  TRIAL
+  MONTHLY
+  YEARLY
+  LIFETIME
+}
+
+enum LicenseStatus {
+  ACTIVE
+  SUSPENDED
+  BLACKLISTED
+  EXPIRED
+}
+
+enum DeviceOS {
+  WINDOWS
+  MAC
+  LINUX
+  CHROME_OS
+  OTHER
+}
+
+enum DeviceBrowser {
+  CHROME
+  EDGE
+  BRAVE
+  OPERA
+  OTHER
+}
+
+enum ReleaseFileType {
+  ZIP
+  CRX
+  EXE
+  MSI
+  DMG
+  DEB
+  RPM
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+enum NotificationType {
+  MAINTENANCE
+  UPDATE
+  SECURITY
+  ANNOUNCEMENT
+}
+
+model User {
+  id            String        @id @default(uuid())
+  email         String        @unique
+  passwordHash  String
+  role          Role          @default(SUPPORT)
+  status        UserStatus    @default(ACTIVE)
+  premiumStatus Boolean       @default(false)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  profile       Profile?
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  licenses      License[]
+  orders        Order[]
+  subscriptions Subscription[]
+}
+
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  fullName  String
+  avatarUrl String?
+  phone     String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String
+  entityName String
+  entityId   String?
+  ipAddress  String?
+  userAgent  String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+  actor      User     @relation(fields: [actorId], references: [id])
+}
+
+model Product {
+  id               String          @id @default(uuid())
+  name             String
+  slug             String          @unique
+  description      String
+  category         ProductCategory
+  price            Decimal         @db.Decimal(10, 2)
+  isLicenseRequired Boolean         @default(true)
+  status           ProductStatus   @default(COMING_SOON)
+  downloadUrl      String?
+  documentationUrl String?
+  iconUrl          String?
+  bannerUrl        String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  screenshots      Screenshot[]
+  releases         Release[]
+  licenses         License[]
+  orderItems       OrderItem[]
+  subscriptions    Subscription[]
+}
+
+model Screenshot {
+  id         String   @id @default(uuid())
+  productId  String
+  imageUrl   String
+  orderIndex Int      @default(0)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Release {
+  id                String          @id @default(uuid())
+  productId         String
+  version           String
+  releaseNotes      String
+  isForceUpdate     Boolean         @default(false)
+  fileUrl           String
+  fileType          ReleaseFileType
+  supportedBrowsers String[]        // e.g. ["Chrome", "Edge"]
+  createdAt         DateTime        @default(now())
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model License {
+  id             String        @id @default(uuid())
+  licenseKey     String        @unique
+  userId         String
+  productId      String
+  type           LicenseType   @default(TRIAL)
+  prefix         String        @db.VarChar(10)
+  status         LicenseStatus @default(ACTIVE)
+  expiryDate     DateTime?
+  activationDate DateTime?
+  lastActiveAt   DateTime?
+  deviceLimit    Int           @default(1)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product        Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  devices        Device[]
+}
+
+model Device {
+  id             String         @id @default(uuid())
+  licenseId      String
+  os             DeviceOS
+  osVersion      String?
+  browser        DeviceBrowser?
+  browserVersion String?
+  clientVersion  String?
+  hwFingerprint  String         @unique // Unique hardware signature
+  lastActiveAt   DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+  license        License        @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id             String      @id @default(uuid())
+  userId         String
+  totalAmount    Decimal     @db.Decimal(10, 2)
+  taxAmount      Decimal     @db.Decimal(10, 2)
+  discountAmount Decimal     @db.Decimal(10, 2)
+  status         OrderStatus @default(PENDING)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  user           User        @relation(fields: [userId], references: [id])
+  orderItems     OrderItem[]
+  payments       Payment[]
+  invoices       Invoice[]
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  productId String
+  price     Decimal  @db.Decimal(10, 2)
+  quantity  Int      @default(1)
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  orderId       String
+  gateway       String   // "Stripe" or "PayPal"
+  txId          String   @unique
+  amount        Decimal  @db.Decimal(10, 2)
+  status        String
+  createdAt     DateTime @default(now())
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id                   String   @id @default(uuid())
+  userId               String
+  productId            String
+  stripeSubscriptionId String   @unique
+  status               String
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id])
+  product              Product  @relation(fields: [productId], references: [id])
+}
+
+model Invoice {
+  id            String   @id @default(uuid())
+  orderId       String
+  invoiceNumber String   @unique
+  pdfUrl        String
+  createdAt     DateTime @default(now())
+  order         Order    @relation(fields: [orderId], references: [id])
+}
+
+model Coupon {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  discountType  String    // "PERCENT" or "FIXED"
+  discountValue Decimal   @db.Decimal(10, 2)
+  maxUses       Int       @default(100)
+  usesCount     Int       @default(0)
+  active        Boolean   @default(true)
+  expiryDate    DateTime?
+}
+
+model Notification {
+  id           String           @id @default(uuid())
+  type         NotificationType
+  title        String
+  message      String
+  targetRole   Role?
+  targetUserId String?
+  active       Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
