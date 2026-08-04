@@ -92,21 +92,24 @@ enum NotificationType {
 }
 
 model User {
-  id            String        @id @default(uuid())
-  email         String        @unique
-  passwordHash  String
-  role          Role          @default(SUPPORT)
-  status        UserStatus    @default(ACTIVE)
-  premiumStatus Boolean       @default(false)
-  notes         String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  profile       Profile?
-  sessions      Session[]
-  auditLogs     AuditLog[]
-  licenses      License[]
-  orders        Order[]
-  subscriptions Subscription[]
+  id              String           @id @default(uuid())
+  email           String           @unique
+  passwordHash    String
+  role            Role             @default(SUPPORT)
+  status          UserStatus       @default(ACTIVE)
+  premiumStatus   Boolean          @default(false)
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  profile         Profile?
+  sessions        Session[]
+  auditLogs       AuditLog[]
+  licenses        License[]
+  orders          Order[]
+  subscriptions   Subscription[]
+  downloads       Download[]
+  supportTickets  SupportTicket[]
+  supportMessages SupportMessage[]
 }
 
 model Profile {
@@ -162,6 +165,7 @@ model Product {
   licenses         License[]
   orderItems       OrderItem[]
   subscriptions    Subscription[]
+  downloads        Download[]
 }
 
 model Screenshot {
@@ -183,6 +187,7 @@ model Release {
   supportedBrowsers String[]        // e.g. ["Chrome", "Edge"]
   createdAt         DateTime        @default(now())
   product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  downloads         Download[]
 }
 
 model License {
@@ -305,4 +310,40 @@ model Setting {
   category  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Download {
+  id        String   @id @default(uuid())
+  productId String
+  releaseId String?
+  userId    String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  release   Release? @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model SupportTicket {
+  id              String           @id @default(uuid())
+  userId          String
+  subject         String
+  status          String           @default("OPEN") // e.g. OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  priority        String           @default("MEDIUM") // e.g. LOW, MEDIUM, HIGH
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supportMessages SupportMessage[]
+}
+
+model SupportMessage {
+  id            String        @id @default(uuid())
+  ticketId      String
+  senderId      String
+  message       String
+  attachmentUrl String?
+  createdAt     DateTime      @default(now())
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender        User          @relation(fields: [senderId], references: [id])
 }
