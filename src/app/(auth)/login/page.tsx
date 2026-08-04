@@ -18,46 +18,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Supabase Verification Status
-  const [connectionStatus, setConnectionStatus] = useState<{
-    checked: boolean;
-    connected: boolean;
-    message?: string;
-    url?: string;
-  }>({ checked: false, connected: false });
-
   const supabase = createClient();
-
-  useEffect(() => {
-    async function verifyConnection() {
-      try {
-        const res = await fetch("/api/supabase/verify");
-        const data = await res.json();
-        if (res.ok && data.connected) {
-          setConnectionStatus({
-            checked: true,
-            connected: true,
-            message: data.message,
-            url: data.supabaseUrl,
-          });
-        } else {
-          setConnectionStatus({
-            checked: true,
-            connected: false,
-            message: data.error || "Failed to verify Supabase connection.",
-          });
-        }
-      } catch (err) {
-        setConnectionStatus({
-          checked: true,
-          connected: false,
-          message: "Unable to reach Supabase API endpoint.",
-        });
-      }
-    }
-
-    verifyConnection();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,29 +80,6 @@ export default function LoginPage() {
             <p className="text-[10px] text-muted tracking-wider uppercase font-semibold">Production Supabase Auth</p>
           </div>
         </div>
-
-        {/* Supabase Live Connection Banner */}
-        {connectionStatus.checked && (
-          <div
-            className={`border text-[10px] p-3 rounded-sm flex items-start gap-2 ${
-              connectionStatus.connected
-                ? "border-green/30 bg-green/5 text-green"
-                : "border-red/30 bg-red/5 text-red"
-            }`}
-          >
-            {connectionStatus.connected ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-green" />
-            ) : (
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red" />
-            )}
-            <div>
-              <p className="font-bold">{connectionStatus.message}</p>
-              {connectionStatus.url && (
-                <p className="font-mono text-[9px] mt-0.5 opacity-80">{connectionStatus.url}</p>
-              )}
-            </div>
-          </div>
-        )}
 
         {!isConfigValid && (
           <div className="border border-gold/30 bg-gold/5 text-gold text-[10px] p-3 rounded-sm flex items-start gap-2">

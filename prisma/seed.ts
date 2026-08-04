@@ -4,34 +4,32 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminEmail = "admin@bornalabs.com";
-  const defaultPassword = "AdminPassword123!";
+  const adminEmail = "kumarsuraj0469@gmail.com";
+  const defaultPassword = "Admin12345";
 
-  console.log("Seeding default SUPER_ADMIN account...");
-
-  const existingAdmin = await prisma.user.findUnique({
-    where: { email: adminEmail },
-  });
-
-  if (existingAdmin) {
-    console.log(`Admin account (${adminEmail}) already exists.`);
-    return;
-  }
+  console.log(`Seeding SUPER_ADMIN account (${adminEmail})...`);
 
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(defaultPassword, salt);
 
-  const adminUser = await prisma.user.create({
-    data: {
+  const adminUser = await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {
+      passwordHash,
+      role: Role.SUPER_ADMIN,
+      status: UserStatus.ACTIVE,
+      premiumStatus: true,
+    },
+    create: {
       email: adminEmail,
       passwordHash,
       role: Role.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
       premiumStatus: true,
-      notes: "Default System Super Administrator",
+      notes: "System Super Administrator Account",
       profile: {
         create: {
-          fullName: "BornaLabs Super Admin",
+          fullName: "Suraj Kumar (Super Admin)",
           country: "India",
           timezone: "Asia/Kolkata",
         },
@@ -42,7 +40,7 @@ async function main() {
     },
   });
 
-  console.log("✅ Default SUPER_ADMIN created successfully:");
+  console.log("✅ SUPER_ADMIN configured successfully:");
   console.log(`- Email: ${adminUser.email}`);
   console.log(`- Password: ${defaultPassword}`);
   console.log(`- Role: ${adminUser.role}`);

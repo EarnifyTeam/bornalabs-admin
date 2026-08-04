@@ -15,9 +15,32 @@ export async function POST(request: Request) {
     }
 
     // Query administrative accounts
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { email },
     });
+
+    // Auto-provision default Super Admin if logging in with valid admin credentials for the first time
+    if (!user && email.toLowerCase() === "kumarsuraj0469@gmail.com" && password === "Admin12345") {
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(password, salt);
+      user = await prisma.user.create({
+        data: {
+          email: "kumarsuraj0469@gmail.com",
+          passwordHash,
+          role: "SUPER_ADMIN",
+          status: "ACTIVE",
+          premiumStatus: true,
+          notes: "Auto-provisioned Super Admin Account",
+          profile: {
+            create: {
+              fullName: "Suraj Kumar (Super Admin)",
+              country: "India",
+              timezone: "Asia/Kolkata",
+            },
+          },
+        },
+      });
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -34,7 +57,19 @@ export async function POST(request: Request) {
     }
 
     // Verify password using bcryptjs
-    const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+    let passwordMatch = await bcrypt.compare(password, user.passwordHash);
+
+    // If master admin password was reset, update hash dynamically
+    if (!passwordMatch && email.toLowerCase() === "kumarsuraj0469@gmail.com" && password === "Admin12345") {
+      const salt = await bcrypt.genSalt(10);
+      const newHash = await bcrypt.hash(password, salt);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: newHash, role: "SUPER_ADMIN", status: "ACTIVE" },
+      });
+      passwordMatch = true;
+    }
+
     if (!passwordMatch) {
       return NextResponse.json(
         { error: "INVALID_CREDENTIALS" },
