@@ -29,7 +29,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 h-screen fixed left-0 top-0 sidebar-glass flex flex-col justify-between py-6 px-4 z-40">
-      <div class="flex flex-col gap-8">
+      <div className="flex flex-col gap-8">
         {/* Brand Header */}
         <div className="flex items-center gap-3 px-3">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-cyan to-violet flex items-center justify-center font-bricolage text-sm font-bold shadow-lg shadow-cyan/15 text-white">
