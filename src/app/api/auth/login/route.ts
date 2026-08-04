@@ -84,9 +84,9 @@ export async function POST(request: Request) {
     });
 
     return response;
-  } catch (error) {
+  } catch (error: any) {
     return NextResponse.json(
-      { error: "INTERNAL_SERVER_ERROR" },
+      { error: error.message || "INTERNAL_SERVER_ERROR", stack: error.stack },
       { status: 500 }
     );
   }
