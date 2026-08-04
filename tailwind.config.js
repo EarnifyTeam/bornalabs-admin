@@ -13,6 +13,7 @@ module.exports = {
         bg2: "#0a0c20",
         surface: "#10132d",
         surface2: "#151a3a",
+        foreground: "#f7f8ff",
         text: "#f7f8ff",
         muted: "#9299ba",
         cyan: "#58d5ff",

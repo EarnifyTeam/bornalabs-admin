@@ -24,12 +24,12 @@ export function Input({
       )}
       <div className="relative flex items-center">
         {leftIcon && (
-          <div className="absolute left-3 text-muted pointer-events-none">
+          <div className="absolute left-3 text-muted pointer-events-none z-10">
             {leftIcon}
           </div>
         )}
         <input
-          className={`bg-surface2/40 border border-border rounded-sm py-2 text-foreground focus:outline-none w-full focus:border-border-active transition-all ${
+          className={`bg-surface2/60 border border-border rounded-sm py-2 text-white placeholder:text-muted focus:outline-none w-full focus:border-border-active transition-all ${
             leftIcon ? "pl-9" : "pl-3"
           } ${rightIcon ? "pr-9" : "pr-3"} ${
             error ? "border-red/40" : ""
@@ -37,7 +37,7 @@ export function Input({
           {...props}
         />
         {rightIcon && (
-          <div className="absolute right-3 text-muted">
+          <div className="absolute right-3 text-muted z-10">
             {rightIcon}
           </div>
         )}
