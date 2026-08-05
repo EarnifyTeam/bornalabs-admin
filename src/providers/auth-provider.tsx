@@ -47,15 +47,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (activeSession?.user) {
       setSession(activeSession);
       setSupabaseUser(activeSession.user);
+      const userRole = activeSession.user.user_metadata?.role || "CUSTOMER";
+      const isAdminRole = ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPPORT"].includes(userRole);
+
       setUser({
         id: activeSession.user.id,
         email: activeSession.user.email || "",
         fullName:
           activeSession.user.user_metadata?.full_name ||
           activeSession.user.email?.split("@")[0] ||
-          "Admin User",
-        role: activeSession.user.user_metadata?.role || "SUPER_ADMIN",
-        isAuthenticated: true,
+          "User",
+        role: userRole,
+        isAuthenticated: isAdminRole,
       });
     } else {
       setSession(null);
@@ -86,12 +89,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (res && res.ok) {
             const data = await res.json().catch(() => null);
             if (data?.user) {
+              const dbRole = data.user.role || "CUSTOMER";
+              const isAdminRole = ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPPORT"].includes(dbRole);
               setUser({
                 id: data.user.id,
                 email: data.user.email,
                 fullName: data.user.fullName || "Admin User",
-                role: data.user.role || "SUPER_ADMIN",
-                isAuthenticated: true,
+                role: dbRole,
+                isAuthenticated: isAdminRole,
               });
               setLoading(false);
               return;

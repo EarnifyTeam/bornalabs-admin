@@ -71,7 +71,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const bornaSession = request.cookies.get("borna_session")?.value;
-  const isAuthenticated = !!user || !!bornaSession;
+
+  const userRole = user?.user_metadata?.role || "CUSTOMER";
+  const isAdminRole = ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPPORT"].includes(userRole);
+
+  const isAuthenticatedAdmin = (!!user && isAdminRole) || !!bornaSession;
 
   const { pathname } = request.nextUrl;
   const isAuthPage =
@@ -87,14 +91,14 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/licenses") ||
     pathname.startsWith("/settings");
 
-  // Redirect unauthenticated users accessing protected routes to /login
-  if (isDashboardPage && !isAuthenticated) {
+  // Redirect unauthenticated or non-admin users accessing protected routes to /login
+  if (isDashboardPage && !isAuthenticatedAdmin) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Redirect authenticated users accessing auth routes to /
-  if (isAuthPage && isAuthenticated) {
+  // Redirect authenticated admin users accessing auth routes to /
+  if (isAuthPage && isAuthenticatedAdmin) {
     const dashboardUrl = new URL("/", request.url);
     return NextResponse.redirect(dashboardUrl);
   }
