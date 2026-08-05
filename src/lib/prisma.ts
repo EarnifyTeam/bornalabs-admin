@@ -1,11 +1,20 @@
 import { PrismaClient } from "@prisma/client";
 
 if (process.env.DATABASE_URL) {
-  let dbUrl = process.env.DATABASE_URL.trim().replace(/^["']|["']$/g, "");
-  if (!dbUrl.startsWith("postgresql://") && !dbUrl.startsWith("postgres://")) {
-    dbUrl = `postgresql://${dbUrl.replace(/^(postgresql:\/\/|postgres:\/\/)?/, "")}`;
+  let raw = process.env.DATABASE_URL.trim();
+  // Strip accidental prefix like DATABASE_URL= or DATABASE_URL =
+  raw = raw.replace(/^DATABASE_URL\s*=\s*/i, "");
+  // Strip surrounding quotes
+  raw = raw.replace(/^["']|["']$/g, "").trim();
+  // Strip secondary layer of DATABASE_URL= or quotes if nested
+  raw = raw.replace(/^DATABASE_URL\s*=\s*/i, "").replace(/^["']|["']$/g, "").trim();
+
+  // Ensure it starts with valid postgresql:// protocol
+  if (!raw.startsWith("postgresql://") && !raw.startsWith("postgres://")) {
+    const stripped = raw.replace(/^[a-zA-Z0-9_]+:\/\//, "").replace(/^[a-zA-Z0-9_]+:\/?\/?/, "");
+    raw = `postgresql://${stripped}`;
   }
-  process.env.DATABASE_URL = dbUrl;
+  process.env.DATABASE_URL = raw;
 }
 
 const prismaClientSingleton = () => {
