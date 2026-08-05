@@ -14,8 +14,10 @@ export async function POST(request: Request) {
 
     const cleanEmail = email.toLowerCase().trim();
 
+    const masterAdminEmail = (process.env.ADMIN_EMAIL || "kumarsuraj0469@gmail.com").toLowerCase().trim();
+
     // Safety restriction: only provision master admin account
-    if (cleanEmail !== "kumarsuraj0469@gmail.com") {
+    if (cleanEmail !== masterAdminEmail) {
       return NextResponse.json(
         { error: "UNAUTHORIZED_PROVISION" },
         { status: 403 }

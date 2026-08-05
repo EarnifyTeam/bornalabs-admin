@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { ensureDbSynced } from "@/lib/prisma";
 import { Role, UserStatus } from "@prisma/client";
 
 /**
@@ -7,6 +7,7 @@ import { Role, UserStatus } from "@prisma/client";
  */
 export async function GET(request: Request) {
   try {
+    await ensureDbSynced();
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const role = searchParams.get("role");
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
+    await ensureDbSynced();
     const body = await request.json();
     const {
       email,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { ensureDbSynced } from "@/lib/prisma";
 
 /**
  * GET: Fetch complete single User Profile details including assigned licenses, products & devices
@@ -9,6 +9,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    await ensureDbSynced();
     const user = await prisma.user.findUnique({
       where: { id: params.id },
       include: {

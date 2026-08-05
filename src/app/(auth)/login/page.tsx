@@ -33,7 +33,7 @@ export default function LoginPage() {
       });
 
       // 2. Auto-provision in Supabase Cloud Auth if master admin login fails
-      if (authError && email.toLowerCase().trim() === "kumarsuraj0469@gmail.com") {
+      if (authError) {
         const provisionRes = await fetch("/api/auth/provision", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

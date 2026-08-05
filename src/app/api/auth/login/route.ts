@@ -14,25 +14,21 @@ export async function POST(request: Request) {
       );
     }
 
-    // Ensure User table schema columns exist before querying
-    await prisma.$executeRawUnsafe(`
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastLoginAt" TIMESTAMP(3);
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "premiumStatus" BOOLEAN NOT NULL DEFAULT false;
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "notes" TEXT;
-    `).catch(() => {});
-
     // Query administrative accounts
     let user = await prisma.user.findUnique({
       where: { email },
     });
 
+    const adminEmail = (process.env.ADMIN_EMAIL || "kumarsuraj0469@gmail.com").toLowerCase().trim();
+    const adminDefaultPassword = process.env.ADMIN_PASSWORD || "Admin12345";
+
     // Auto-provision default Super Admin if logging in with valid admin credentials for the first time
-    if (!user && email.toLowerCase() === "kumarsuraj0469@gmail.com" && password === "Admin12345") {
+    if (!user && email.toLowerCase().trim() === adminEmail && password === adminDefaultPassword) {
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(password, salt);
       user = await prisma.user.create({
         data: {
-          email: "kumarsuraj0469@gmail.com",
+          email: adminEmail,
           passwordHash,
           role: "SUPER_ADMIN",
           status: "ACTIVE",
@@ -40,7 +36,7 @@ export async function POST(request: Request) {
           notes: "Auto-provisioned Super Admin Account",
           profile: {
             create: {
-              fullName: "Suraj Kumar (Super Admin)",
+              fullName: "BornaLabs Super Admin",
               country: "India",
               timezone: "Asia/Kolkata",
             },
@@ -67,7 +63,7 @@ export async function POST(request: Request) {
     let passwordMatch = await bcrypt.compare(password, user.passwordHash);
 
     // If master admin password was reset, update hash dynamically
-    if (!passwordMatch && email.toLowerCase() === "kumarsuraj0469@gmail.com" && password === "Admin12345") {
+    if (!passwordMatch && email.toLowerCase().trim() === adminEmail && password === adminDefaultPassword) {
       const salt = await bcrypt.genSalt(10);
       const newHash = await bcrypt.hash(password, salt);
       await prisma.user.update({
