@@ -3,12 +3,24 @@ import { PrismaClient } from "@prisma/client";
 if (process.env.DATABASE_URL) {
   let raw = process.env.DATABASE_URL.trim();
   raw = raw.replace(/^DATABASE_URL\s*=\s*/i, "").replace(/^["']|["']$/g, "").trim();
+
+  // Fix: Direct host db.xxx.supabase.co:5432 requires username "postgres" (NOT "postgres.xxx")
+  if (raw.includes("supabase.co:5432") || (raw.includes("supabase.co") && !raw.includes("pooler.supabase.com"))) {
+    raw = raw.replace(/:\/\/postgres\.[^:@]+:/i, "://postgres:");
+    raw = raw.replace(/[?&]pgbouncer=true/i, "");
+  }
+
   process.env.DATABASE_URL = raw;
 }
 
 if (process.env.DIRECT_URL) {
   let raw = process.env.DIRECT_URL.trim();
   raw = raw.replace(/^DIRECT_URL\s*=\s*/i, "").replace(/^["']|["']$/g, "").trim();
+
+  if (raw.includes("supabase.co:5432") || (raw.includes("supabase.co") && !raw.includes("pooler.supabase.com"))) {
+    raw = raw.replace(/:\/\/postgres\.[^:@]+:/i, "://postgres:");
+  }
+
   process.env.DIRECT_URL = raw;
 }
 
