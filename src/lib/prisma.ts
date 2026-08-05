@@ -1,5 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 
+if (process.env.DATABASE_URL) {
+  let dbUrl = process.env.DATABASE_URL.trim().replace(/^["']|["']$/g, "");
+  if (!dbUrl.startsWith("postgresql://") && !dbUrl.startsWith("postgres://")) {
+    dbUrl = `postgresql://${dbUrl.replace(/^(postgresql:\/\/|postgres:\/\/)?/, "")}`;
+  }
+  process.env.DATABASE_URL = dbUrl;
+}
+
 const prismaClientSingleton = () => {
   return new PrismaClient();
 };
