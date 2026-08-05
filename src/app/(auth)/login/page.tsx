@@ -27,7 +27,7 @@ export default function LoginPage() {
 
     try {
       // 1. Try Supabase Auth first
-      let { error: authError } = await supabase.auth.signInWithPassword({
+      let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -45,11 +45,24 @@ export default function LoginPage() {
             email,
             password,
           });
+          authData = retry.data;
           authError = retry.error;
         }
       }
 
-      if (!authError) {
+      if (!authError && authData?.user) {
+        const userEmail = (authData.user.email || "").toLowerCase().trim();
+        const isMasterAdmin = userEmail === "kumarsuraj0469@gmail.com";
+        const userRole = authData.user.user_metadata?.role || (isMasterAdmin ? "SUPER_ADMIN" : "CUSTOMER");
+        const isAdminRole = ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPPORT"].includes(userRole) || isMasterAdmin;
+
+        if (!isAdminRole) {
+          await supabase.auth.signOut();
+          setError("Access Denied: Customer accounts are not allowed to log into the Admin Control Center.");
+          setLoading(false);
+          return;
+        }
+
         router.push("/");
         router.refresh();
         return;
@@ -66,7 +79,8 @@ export default function LoginPage() {
         router.push("/");
         router.refresh();
       } else {
-        setError(authError?.message || "Invalid email or password.");
+        const data = await res.json().catch(() => null);
+        setError(data?.message || authError?.message || "Invalid email or password.");
       }
     } catch (err: any) {
       setError("Connection error to authentication server.");

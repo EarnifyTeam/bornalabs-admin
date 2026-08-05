@@ -52,6 +52,14 @@ export async function POST(request: Request) {
       );
     }
 
+    const isAdminRole = ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPPORT"].includes(user.role);
+    if (!isAdminRole) {
+      return NextResponse.json(
+        { error: "CUSTOMER_ACCESS_DENIED", message: "Access Denied: Customer accounts are not allowed to log into the Admin Control Center." },
+        { status: 403 }
+      );
+    }
+
     if (user.status !== "ACTIVE") {
       return NextResponse.json(
         { error: `ACCOUNT_${user.status}` },
