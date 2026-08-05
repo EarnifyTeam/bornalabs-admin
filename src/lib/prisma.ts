@@ -2,27 +2,14 @@ import { PrismaClient } from "@prisma/client";
 
 if (process.env.DATABASE_URL) {
   let raw = process.env.DATABASE_URL.trim();
-  // Strip accidental prefix like DATABASE_URL= or DATABASE_URL =
-  raw = raw.replace(/^DATABASE_URL\s*=\s*/i, "");
-  // Strip surrounding quotes
-  raw = raw.replace(/^["']|["']$/g, "").trim();
-  // Strip secondary layer of DATABASE_URL= or quotes if nested
   raw = raw.replace(/^DATABASE_URL\s*=\s*/i, "").replace(/^["']|["']$/g, "").trim();
-
-  // Ensure it starts with valid postgresql:// protocol
-  if (!raw.startsWith("postgresql://") && !raw.startsWith("postgres://")) {
-    const stripped = raw.replace(/^[a-zA-Z0-9_]+:\/\//, "").replace(/^[a-zA-Z0-9_]+:\/?\/?/, "");
-    raw = `postgresql://${stripped}`;
-  }
-
-  // Handle Supabase Direct vs Pooler URL formats
-  if (raw.includes("supabase.co:5432") || (raw.includes("supabase.co") && !raw.includes("pooler.supabase.com"))) {
-    // Direct host (db.xxx.supabase.co:5432) requires username "postgres" (NOT "postgres.projectref")
-    raw = raw.replace(/postgresql:\/\/postgres\.[a-z0-9]+:/i, "postgresql://postgres:");
-    raw = raw.replace(/[?&]pgbouncer=true/i, "");
-  }
-
   process.env.DATABASE_URL = raw;
+}
+
+if (process.env.DIRECT_URL) {
+  let raw = process.env.DIRECT_URL.trim();
+  raw = raw.replace(/^DIRECT_URL\s*=\s*/i, "").replace(/^["']|["']$/g, "").trim();
+  process.env.DIRECT_URL = raw;
 }
 
 const prismaClientSingleton = () => {
