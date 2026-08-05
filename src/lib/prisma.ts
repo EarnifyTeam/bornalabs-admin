@@ -14,6 +14,14 @@ if (process.env.DATABASE_URL) {
     const stripped = raw.replace(/^[a-zA-Z0-9_]+:\/\//, "").replace(/^[a-zA-Z0-9_]+:\/?\/?/, "");
     raw = `postgresql://${stripped}`;
   }
+
+  // Handle Supabase Direct vs Pooler URL formats
+  if (raw.includes("supabase.co:5432") || (raw.includes("supabase.co") && !raw.includes("pooler.supabase.com"))) {
+    // Direct host (db.xxx.supabase.co:5432) requires username "postgres" (NOT "postgres.projectref")
+    raw = raw.replace(/postgresql:\/\/postgres\.[a-z0-9]+:/i, "postgresql://postgres:");
+    raw = raw.replace(/[?&]pgbouncer=true/i, "");
+  }
+
   process.env.DATABASE_URL = raw;
 }
 
