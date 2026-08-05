@@ -72,8 +72,12 @@ export async function updateSession(request: NextRequest) {
 
   const bornaSession = request.cookies.get("borna_session")?.value;
 
-  const userRole = user?.user_metadata?.role || "CUSTOMER";
-  const isAdminRole = ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPPORT"].includes(userRole);
+  const masterAdminEmail = (process.env.ADMIN_EMAIL || "kumarsuraj0469@gmail.com").toLowerCase().trim();
+  const userEmail = user?.email?.toLowerCase().trim() || "";
+
+  const isMasterAdmin = userEmail === masterAdminEmail && !!userEmail;
+  const userRole = user?.user_metadata?.role || (isMasterAdmin ? "SUPER_ADMIN" : "CUSTOMER");
+  const isAdminRole = ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPPORT"].includes(userRole) || isMasterAdmin;
 
   const isAuthenticatedAdmin = (!!user && isAdminRole) || !!bornaSession;
 

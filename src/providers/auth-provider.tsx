@@ -47,8 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (activeSession?.user) {
       setSession(activeSession);
       setSupabaseUser(activeSession.user);
-      const userRole = activeSession.user.user_metadata?.role || "CUSTOMER";
-      const isAdminRole = ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPPORT"].includes(userRole);
+      const userEmail = (activeSession.user.email || "").toLowerCase().trim();
+      const isMasterAdmin = userEmail === "kumarsuraj0469@gmail.com";
+      const userRole = activeSession.user.user_metadata?.role || (isMasterAdmin ? "SUPER_ADMIN" : "CUSTOMER");
+      const isAdminRole = ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPPORT"].includes(userRole) || isMasterAdmin;
 
       setUser({
         id: activeSession.user.id,
@@ -57,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           activeSession.user.user_metadata?.full_name ||
           activeSession.user.email?.split("@")[0] ||
           "User",
-        role: userRole,
+        role: isMasterAdmin ? "SUPER_ADMIN" : userRole,
         isAuthenticated: isAdminRole,
       });
     } else {
