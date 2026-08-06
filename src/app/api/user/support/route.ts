@@ -126,7 +126,7 @@ export async function POST(request: Request) {
   const origin = request.headers.get("origin");
   try {
     const body = await request.json();
-    const { userId, userEmail, email, subject, message, priority, category } = body;
+    const { ticketId, userId, userEmail, email, subject, message, priority, category, status } = body;
 
     const rawEmail = (userEmail || email || "").trim().toLowerCase();
 
@@ -161,6 +161,35 @@ export async function POST(request: Request) {
       // Fallback: assign to first user or super admin
       const fallbackUser = await prisma.user.findFirst();
       targetUserId = fallbackUser?.id;
+    }
+
+    // 1. Reply to existing Ticket if ticketId is provided
+    if (ticketId) {
+      const existingTicket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
+      if (!existingTicket) {
+        return NextResponse.json({ error: "TICKET_NOT_FOUND" }, { status: 404, headers: corsHeaders(origin) });
+      }
+
+      const supportMsg = await prisma.supportMessage.create({
+        data: {
+          ticketId,
+          senderId: targetUserId || existingTicket.userId,
+          message: (message || "").trim(),
+        },
+        include: {
+          sender: {
+            select: { id: true, email: true, role: true, profile: { select: { fullName: true } } },
+          },
+        },
+      });
+
+      const nextStatus = status || existingTicket.status;
+      await prisma.supportTicket.update({
+        where: { id: ticketId },
+        data: { status: nextStatus, updatedAt: new Date() },
+      });
+
+      return NextResponse.json({ success: true, message: supportMsg }, { status: 201, headers: corsHeaders(origin) });
     }
 
     if (!targetUserId || !subject || !message) {

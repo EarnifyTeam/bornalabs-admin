@@ -4,6 +4,7 @@ import {
   Package, 
   Puzzle, 
   Key, 
+  LifeBuoy,
   Settings 
 } from "lucide-react";
 
@@ -40,6 +41,11 @@ export const navItems: NavItem[] = [
     title: "Licenses Telemetry",
     href: "/licenses",
     icon: Key,
+  },
+  {
+    title: "Support Desk",
+    href: "/support",
+    icon: LifeBuoy,
   },
   {
     title: "System Settings",

@@ -41,11 +41,13 @@ export default function CustomerSupportPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
 
-  // Form State
+  // Form & Reply State
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [priority, setPriority] = useState("MEDIUM");
   const [submitting, setSubmitting] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [replying, setReplying] = useState(false);
 
   const fetchTickets = async () => {
     setLoading(true);
@@ -54,6 +56,10 @@ export default function CustomerSupportPage() {
       const data = await res.json();
       if (res.ok) {
         setTickets(data.tickets || []);
+        if (selectedTicket) {
+          const updated = (data.tickets || []).find((t: any) => t.id === selectedTicket.id);
+          if (updated) setSelectedTicket(updated);
+        }
       }
     } catch (err) {
       console.error("Failed to load support tickets:", err);
@@ -65,6 +71,58 @@ export default function CustomerSupportPage() {
   useEffect(() => {
     fetchTickets();
   }, []);
+
+  const handleSendReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTicket || !replyText.trim()) return;
+
+    setReplying(true);
+    try {
+      const res = await fetch("/api/user/support", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticketId: selectedTicket.id,
+          message: replyText.trim(),
+          status: "IN_PROGRESS",
+          isStaff: true,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Official support reply sent successfully!");
+        setReplyText("");
+        await fetchTickets();
+      } else {
+        toast.error("Failed to send support reply.");
+      }
+    } catch {
+      toast.error("Error sending support reply.");
+    } finally {
+      setReplying(false);
+    }
+  };
+
+  const handleUpdateStatus = async (newStatus: string) => {
+    if (!selectedTicket) return;
+    try {
+      const res = await fetch("/api/user/support", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticketId: selectedTicket.id,
+          message: `Ticket status updated to ${newStatus}`,
+          status: newStatus,
+        }),
+      });
+      if (res.ok) {
+        toast.success(`Ticket status updated to ${newStatus}`);
+        await fetchTickets();
+      }
+    } catch {
+      toast.error("Failed to update status.");
+    }
+  };
 
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,19 +241,59 @@ export default function CustomerSupportPage() {
 
               {/* Message Thread */}
               <div className="flex flex-col gap-3 max-h-80 overflow-y-auto my-2 p-2">
-                {selectedTicket.supportMessages?.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className="p-3 rounded-sm bg-surface2/40 border border-border flex flex-col gap-1 text-xs"
-                  >
-                    <div className="flex justify-between items-center text-[10px] text-muted">
-                      <span className="font-bold text-cyan">Customer Request</span>
-                      <span>{new Date(msg.createdAt).toLocaleTimeString()}</span>
+                {selectedTicket.supportMessages?.map((msg: any) => {
+                  const isStaff = msg.sender?.role === "SUPER_ADMIN" || msg.sender?.role === "ADMIN" || msg.sender?.role === "SUPPORT";
+                  const senderName = msg.sender?.profile?.fullName || msg.sender?.email || (isStaff ? "Official Support" : "Customer");
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`p-3 rounded-md border flex flex-col gap-1 text-xs ${
+                        isStaff
+                          ? "bg-cyan/10 border-cyan/30 ml-4"
+                          : "bg-surface2/40 border-border mr-4"
+                      }`}
+                    >
+                      <div className="flex justify-between items-center text-[10px] text-muted">
+                        <span className={`font-bold ${isStaff ? "text-cyan" : "text-amber-400"}`}>
+                          {senderName} {isStaff ? "(Official Reply)" : ""}
+                        </span>
+                        <span>{new Date(msg.createdAt).toLocaleString()}</span>
+                      </div>
+                      <p className="text-foreground leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                     </div>
-                    <p className="text-foreground leading-relaxed whitespace-pre-wrap">{msg.message}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {/* Official Reply Box */}
+              <form onSubmit={handleSendReply} className="mt-3 pt-3 border-t border-border flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[11px] font-bold text-muted uppercase">Ticket Status:</label>
+                  <select
+                    value={selectedTicket.status}
+                    onChange={(e) => handleUpdateStatus(e.target.value)}
+                    className="bg-surface2/60 border border-border rounded-sm py-1 px-2 text-foreground text-xs font-semibold focus:outline-none"
+                  >
+                    <option value="OPEN">Status: OPEN</option>
+                    <option value="IN_PROGRESS">Status: IN PROGRESS</option>
+                    <option value="RESOLVED">Status: RESOLVED</option>
+                    <option value="CLOSED">Status: CLOSED</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2">
+                  <textarea
+                    rows={3}
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="Type official support response to customer..."
+                    className="bg-surface2/60 border border-border rounded-md p-2.5 text-foreground text-xs focus:outline-none focus:border-cyan flex-1"
+                  />
+                  <Button type="submit" variant="primary" disabled={replying || !replyText.trim()} className="self-end h-10 px-4">
+                    {replying ? "Sending..." : "Send Reply"}
+                  </Button>
+                </div>
+              </form>
             </div>
           ) : (
             <div className="text-center py-24 text-muted flex flex-col items-center justify-center gap-2">
