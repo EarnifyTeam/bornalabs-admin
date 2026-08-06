@@ -51,6 +51,12 @@ export default function SettingsPage() {
     enforce_hw_binding: "true",
     auto_expire_trials: "true",
 
+    // Extension & Branding
+    developer_name: "BornaLabs",
+    whatsapp_link: "https://wa.me/919876543210",
+    instagram_link: "https://instagram.com/bornalabs",
+    facebook_link: "https://facebook.com/bornalabs",
+
     // Payment Methods
     enable_manual_upi_payment: "true",
     enable_online_payment: "false",
@@ -119,6 +125,12 @@ export default function SettingsPage() {
         { key: "heartbeat_interval_minutes", value: settings.heartbeat_interval_minutes, category: "telemetry" },
         { key: "enforce_hw_binding", value: settings.enforce_hw_binding, category: "telemetry" },
         { key: "auto_expire_trials", value: settings.auto_expire_trials, category: "telemetry" },
+
+        // Extension & Branding
+        { key: "developer_name", value: settings.developer_name, category: "extension" },
+        { key: "whatsapp_link", value: settings.whatsapp_link, category: "extension" },
+        { key: "instagram_link", value: settings.instagram_link, category: "extension" },
+        { key: "facebook_link", value: settings.facebook_link, category: "extension" },
 
         // Payment Methods
         { key: "enable_manual_upi_payment", value: settings.enable_manual_upi_payment, category: "payment" },
@@ -449,9 +461,46 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Manual UPI & Bank Details Section */}
+                {/* Extension Developer & Social Media Links */}
                 <div className="flex flex-col gap-4 pt-2">
-                  <h4 className="font-bold text-xs text-cyan uppercase tracking-wider">1. Manual Payment Configuration (UPI / Bank / WhatsApp)</h4>
+                  <h4 className="font-bold text-xs text-cyan uppercase tracking-wider">1. Extension Developer & Social Media Links (Live Chrome Extension Sync)</h4>
+                  
+                  <div className="grid grid-cols-2 gap-6">
+                    <Input
+                      label="Developer Name (Displayed in Extension)"
+                      value={settings.developer_name || ""}
+                      onChange={(e) => handleChange("developer_name", e.target.value)}
+                      placeholder="e.g. BornaLabs (or Earnify Labs)"
+                    />
+
+                    <Input
+                      label="WhatsApp Button Link"
+                      value={settings.whatsapp_link || ""}
+                      onChange={(e) => handleChange("whatsapp_link", e.target.value)}
+                      placeholder="e.g. https://wa.me/919876543210"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    <Input
+                      label="Instagram Button Link"
+                      value={settings.instagram_link || ""}
+                      onChange={(e) => handleChange("instagram_link", e.target.value)}
+                      placeholder="e.g. https://instagram.com/bornalabs"
+                    />
+
+                    <Input
+                      label="Facebook Button Link"
+                      value={settings.facebook_link || ""}
+                      onChange={(e) => handleChange("facebook_link", e.target.value)}
+                      placeholder="e.g. https://facebook.com/bornalabs"
+                    />
+                  </div>
+                </div>
+
+                {/* Manual UPI & Bank Details Section */}
+                <div className="flex flex-col gap-4 pt-2 border-t border-border">
+                  <h4 className="font-bold text-xs text-amber-400 uppercase tracking-wider">2. Manual Payment Configuration (UPI / Bank / WhatsApp)</h4>
                   
                   <div className="grid grid-cols-2 gap-6">
                     <Input
