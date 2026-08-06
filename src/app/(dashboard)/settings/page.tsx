@@ -15,12 +15,14 @@ import {
   RefreshCw,
   Lock,
   Globe,
-  Sliders
+  Sliders,
+  CreditCard,
+  QrCode
 } from "lucide-react";
 
 export default function SettingsPage() {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<"general" | "security" | "smtp" | "telemetry">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "security" | "smtp" | "telemetry" | "payment">("general");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -48,6 +50,20 @@ export default function SettingsPage() {
     heartbeat_interval_minutes: "15",
     enforce_hw_binding: "true",
     auto_expire_trials: "true",
+
+    // Payment Methods
+    enable_manual_upi_payment: "true",
+    enable_online_payment: "false",
+    upi_id: "bornalabs@upi",
+    upi_qr_url: "",
+    bank_name: "HDFC Bank",
+    bank_account_number: "50100012345678",
+    bank_ifsc: "HDFC0001234",
+    whatsapp_payment_number: "+919876543210",
+    stripe_publishable_key: "",
+    stripe_secret_key: "",
+    razorpay_key_id: "",
+    razorpay_key_secret: "",
   });
 
   const fetchSettings = async () => {
@@ -103,6 +119,20 @@ export default function SettingsPage() {
         { key: "heartbeat_interval_minutes", value: settings.heartbeat_interval_minutes, category: "telemetry" },
         { key: "enforce_hw_binding", value: settings.enforce_hw_binding, category: "telemetry" },
         { key: "auto_expire_trials", value: settings.auto_expire_trials, category: "telemetry" },
+
+        // Payment Methods
+        { key: "enable_manual_upi_payment", value: settings.enable_manual_upi_payment, category: "payment" },
+        { key: "enable_online_payment", value: settings.enable_online_payment, category: "payment" },
+        { key: "upi_id", value: settings.upi_id, category: "payment" },
+        { key: "upi_qr_url", value: settings.upi_qr_url, category: "payment" },
+        { key: "bank_name", value: settings.bank_name, category: "payment" },
+        { key: "bank_account_number", value: settings.bank_account_number, category: "payment" },
+        { key: "bank_ifsc", value: settings.bank_ifsc, category: "payment" },
+        { key: "whatsapp_payment_number", value: settings.whatsapp_payment_number, category: "payment" },
+        { key: "stripe_publishable_key", value: settings.stripe_publishable_key, category: "payment" },
+        { key: "stripe_secret_key", value: settings.stripe_secret_key, category: "payment" },
+        { key: "razorpay_key_id", value: settings.razorpay_key_id, category: "payment" },
+        { key: "razorpay_key_secret", value: settings.razorpay_key_secret, category: "payment" },
       ];
 
       const res = await fetch("/api/settings", {
@@ -160,6 +190,7 @@ export default function SettingsPage() {
             { id: "security", label: "Security", icon: Lock },
             { id: "smtp", label: "SMTP Email", icon: Mail },
             { id: "telemetry", label: "Telemetry", icon: Activity },
+            { id: "payment", label: "Payments & UPI", icon: CreditCard },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -360,6 +391,151 @@ export default function SettingsPage() {
                         Auto-Expire Trial Keys Upon Capacity Limit
                       </label>
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PAYMENTS & UPI TAB */}
+            {activeTab === "payment" && (
+              <div className="flex flex-col gap-6">
+                <div className="border-b border-border pb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bricolage font-bold text-sm text-white">Payment Gateways & Manual UPI Settings</h3>
+                    <p className="text-[10px] text-muted">Toggle payment methods, update UPI QR Code, Bank details, WhatsApp number & Online Gateways.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge variant={settings.enable_manual_upi_payment === "true" ? "active" : "neutral"}>
+                      Manual UPI: {settings.enable_manual_upi_payment === "true" ? "ACTIVE" : "OFF"}
+                    </Badge>
+                    <Badge variant={settings.enable_online_payment === "true" ? "active" : "neutral"}>
+                      Online Gateways: {settings.enable_online_payment === "true" ? "ACTIVE" : "OFF"}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Toggle Switches */}
+                <div className="grid grid-cols-2 gap-6 p-4 rounded-md bg-surface2/30 border border-border">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="enable_manual_upi_payment"
+                      checked={settings.enable_manual_upi_payment === "true"}
+                      onChange={(e) => handleChange("enable_manual_upi_payment", e.target.checked ? "true" : "false")}
+                      className="accent-cyan w-5 h-5 rounded cursor-pointer"
+                    />
+                    <div>
+                      <label htmlFor="enable_manual_upi_payment" className="text-xs font-bold text-white cursor-pointer">
+                        Enable Manual UPI / QR Code / Bank / WhatsApp Payment
+                      </label>
+                      <p className="text-[10px] text-muted">Allows customers to submit payment screenshots, UTR / TxID, or contact WhatsApp.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="enable_online_payment"
+                      checked={settings.enable_online_payment === "true"}
+                      onChange={(e) => handleChange("enable_online_payment", e.target.checked ? "true" : "false")}
+                      className="accent-violet w-5 h-5 rounded cursor-pointer"
+                    />
+                    <div>
+                      <label htmlFor="enable_online_payment" className="text-xs font-bold text-white cursor-pointer">
+                        Enable Automated Online Payment Gateways (Stripe / Razorpay)
+                      </label>
+                      <p className="text-[10px] text-muted">Enables 1-click automatic instant checkout via Stripe or Razorpay.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Manual UPI & Bank Details Section */}
+                <div className="flex flex-col gap-4 pt-2">
+                  <h4 className="font-bold text-xs text-cyan uppercase tracking-wider">1. Manual Payment Configuration (UPI / Bank / WhatsApp)</h4>
+                  
+                  <div className="grid grid-cols-2 gap-6">
+                    <Input
+                      label="UPI ID / VPA Address"
+                      value={settings.upi_id || ""}
+                      onChange={(e) => handleChange("upi_id", e.target.value)}
+                      placeholder="e.g. bornalabs@upi"
+                    />
+
+                    <Input
+                      label="WhatsApp Contact Number (for Payment Verification)"
+                      value={settings.whatsapp_payment_number || ""}
+                      onChange={(e) => handleChange("whatsapp_payment_number", e.target.value)}
+                      placeholder="e.g. +919876543210"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-6">
+                    <Input
+                      label="Bank Name"
+                      value={settings.bank_name || ""}
+                      onChange={(e) => handleChange("bank_name", e.target.value)}
+                      placeholder="e.g. HDFC Bank"
+                    />
+
+                    <Input
+                      label="Bank Account Number"
+                      value={settings.bank_account_number || ""}
+                      onChange={(e) => handleChange("bank_account_number", e.target.value)}
+                      placeholder="e.g. 50100012345678"
+                    />
+
+                    <Input
+                      label="Bank IFSC Code"
+                      value={settings.bank_ifsc || ""}
+                      onChange={(e) => handleChange("bank_ifsc", e.target.value)}
+                      placeholder="e.g. HDFC0001234"
+                    />
+                  </div>
+
+                  <Input
+                    label="UPI QR Code Image URL"
+                    value={settings.upi_qr_url || ""}
+                    onChange={(e) => handleChange("upi_qr_url", e.target.value)}
+                    placeholder="https://yourdomain.com/qr-code.png or Google Drive / Cloudinary image link"
+                  />
+                </div>
+
+                {/* Online Payment Gateways API Keys Section */}
+                <div className="flex flex-col gap-4 pt-4 border-t border-border">
+                  <h4 className="font-bold text-xs text-violet uppercase tracking-wider">2. Online Payment Gateway API Credentials</h4>
+                  
+                  <div className="grid grid-cols-2 gap-6">
+                    <Input
+                      label="Stripe Publishable Key"
+                      value={settings.stripe_publishable_key || ""}
+                      onChange={(e) => handleChange("stripe_publishable_key", e.target.value)}
+                      placeholder="pk_live_..."
+                    />
+
+                    <Input
+                      label="Stripe Secret Key"
+                      type="password"
+                      value={settings.stripe_secret_key || ""}
+                      onChange={(e) => handleChange("stripe_secret_key", e.target.value)}
+                      placeholder="sk_live_..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    <Input
+                      label="Razorpay Key ID"
+                      value={settings.razorpay_key_id || ""}
+                      onChange={(e) => handleChange("razorpay_key_id", e.target.value)}
+                      placeholder="rzp_live_..."
+                    />
+
+                    <Input
+                      label="Razorpay Key Secret"
+                      type="password"
+                      value={settings.razorpay_key_secret || ""}
+                      onChange={(e) => handleChange("razorpay_key_secret", e.target.value)}
+                      placeholder="Secret Key..."
+                    />
                   </div>
                 </div>
               </div>
