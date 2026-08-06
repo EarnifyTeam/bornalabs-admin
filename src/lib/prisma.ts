@@ -1,31 +1,39 @@
 import { PrismaClient } from "@prisma/client";
 
-if (process.env.DATABASE_URL) {
-  let raw = process.env.DATABASE_URL.trim();
-  raw = raw.replace(/^DATABASE_URL\s*=\s*/i, "").replace(/^["']|["']$/g, "").trim();
+function getSanitizedDbUrl(): string {
+  let url = (process.env.DATABASE_URL || "").trim();
+  url = url.replace(/^DATABASE_URL\s*=\s*/i, "").replace(/^["']|["']$/g, "").trim();
 
-  // Fix: Direct host db.xxx.supabase.co:5432 requires username "postgres" (NOT "postgres.xxx")
-  if (raw.includes("supabase.co:5432") || (raw.includes("supabase.co") && !raw.includes("pooler.supabase.com"))) {
-    raw = raw.replace(/:\/\/postgres\.[^:@]+:/i, "://postgres:");
-    raw = raw.replace(/[?&]pgbouncer=true/i, "");
+  if (!url) {
+    url = "postgresql://postgres:earnifyflow%40admin12345@db.iuzdqwgdetxyxyqsfvet.supabase.co:6543/postgres?pgbouncer=true&connection_limit=1";
   }
 
-  process.env.DATABASE_URL = raw;
-}
-
-if (process.env.DIRECT_URL) {
-  let raw = process.env.DIRECT_URL.trim();
-  raw = raw.replace(/^DIRECT_URL\s*=\s*/i, "").replace(/^["']|["']$/g, "").trim();
-
-  if (raw.includes("supabase.co:5432") || (raw.includes("supabase.co") && !raw.includes("pooler.supabase.com"))) {
-    raw = raw.replace(/:\/\/postgres\.[^:@]+:/i, "://postgres:");
+  if (url.includes("@admin12345@")) {
+    url = url.replace("earnifyflow@admin12345@", "earnifyflow%40admin12345@");
   }
 
-  process.env.DIRECT_URL = raw;
+  if (url.includes("supabase.co")) {
+    url = url.replace(":5432/", ":6543/");
+    if (!url.includes("pgbouncer=true")) {
+      const separator = url.includes("?") ? "&" : "?";
+      url = `${url}${separator}pgbouncer=true&connection_limit=1`;
+    }
+  }
+
+  return url;
 }
+
+const dbUrl = getSanitizedDbUrl();
+process.env.DATABASE_URL = dbUrl;
 
 const prismaClientSingleton = () => {
-  return new PrismaClient();
+  return new PrismaClient({
+    datasources: {
+      db: {
+        url: dbUrl,
+      },
+    },
+  });
 };
 
 declare global {
