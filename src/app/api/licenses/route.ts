@@ -149,7 +149,7 @@ export async function POST(request: Request) {
           data: {
             email: userEmail,
             passwordHash: "NOPASSWORD_ADMIN_ISSUED",
-            role: "SUPPORT",
+            role: "CUSTOMER",
             status: "ACTIVE",
           },
         });

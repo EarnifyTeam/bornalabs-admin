@@ -12,7 +12,6 @@ export async function GET(request: Request) {
     const userId = searchParams.get("userId");
     const userEmail = searchParams.get("userEmail") || searchParams.get("email");
 
-    // Fetch primary target user or default to first registered user
     let user = userId ? await prisma.user.findUnique({ where: { id: userId }, include: { profile: true } }) : null;
 
     if (!user && userEmail) {
@@ -20,11 +19,20 @@ export async function GET(request: Request) {
     }
 
     if (!user) {
-      user = await prisma.user.findFirst({ include: { profile: true } });
-    }
-
-    if (!user) {
-      return NextResponse.json({ error: "USER_NOT_FOUND" }, { status: 404 });
+      return NextResponse.json({
+        success: true,
+        user: null,
+        stats: {
+          totalLicenses: 0,
+          activeLicenses: 0,
+          assignedProductsCount: 0,
+          totalDownloadsCount: 0,
+        },
+        products: [],
+        licenses: [],
+        notifications: [],
+        recentDownloads: [],
+      });
     }
 
     const [licenses, notifications, downloads] = await Promise.all([

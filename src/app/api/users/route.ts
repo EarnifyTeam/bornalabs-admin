@@ -47,7 +47,7 @@ const fetchSupabaseAuthUsersFromDb = async () => {
     .filter((user) => user.email);
 };
 
-const matchesFilters = (user: any, search: string, role?: string, status?: string) => {
+const matchesFilters = (user: any, search: string, role?: string | null, status?: string | null) => {
   const lowerSearch = search.toLowerCase();
   const fullName = user.profile?.fullName?.toLowerCase() || "";
   const email = user.email?.toLowerCase() || "";

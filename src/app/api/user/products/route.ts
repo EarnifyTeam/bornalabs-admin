@@ -11,9 +11,6 @@ export async function GET(request: Request) {
     if (!user && userEmail) {
       user = await prisma.user.findUnique({ where: { email: userEmail } });
     }
-    if (!user) {
-      user = await prisma.user.findFirst();
-    }
 
     if (!user) {
       return NextResponse.json({ success: true, products: [] });
