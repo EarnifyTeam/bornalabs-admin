@@ -113,14 +113,28 @@ export async function POST(request: Request) {
       }
     }
 
+    // Fetch dynamic trial prompt quota from Admin Settings
+    let trialPromptQuota = 1000;
+    try {
+      const trialQuotaSetting = await prisma.setting.findFirst({
+        where: { key: "default_trial_prompts" },
+      });
+      if (trialQuotaSetting?.value) {
+        trialPromptQuota = parseInt(trialQuotaSetting.value, 10) || 1000;
+      }
+    } catch {
+      // Fallback
+    }
+
     const isTrial = license.type === "TRIAL";
+    const remainingPrompts = isTrial ? trialPromptQuota : 999999;
 
     return NextResponse.json(
       {
         ok: true,
         kind: isTrial ? "free" : "pro",
         unlimited: !isTrial,
-        remaining: 1000,
+        remaining: remainingPrompts,
         license: {
           id: license.id,
           licenseKey: license.licenseKey,

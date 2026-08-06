@@ -53,6 +53,7 @@ export default function SettingsPage() {
 
     // Extension & Branding
     developer_name: "BornaLabs",
+    default_trial_prompts: "1000",
     whatsapp_link: "https://wa.me/919876543210",
     instagram_link: "https://instagram.com/bornalabs",
     facebook_link: "https://facebook.com/bornalabs",
@@ -128,6 +129,7 @@ export default function SettingsPage() {
 
         // Extension & Branding
         { key: "developer_name", value: settings.developer_name, category: "extension" },
+        { key: "default_trial_prompts", value: settings.default_trial_prompts, category: "extension" },
         { key: "whatsapp_link", value: settings.whatsapp_link, category: "extension" },
         { key: "instagram_link", value: settings.instagram_link, category: "extension" },
         { key: "facebook_link", value: settings.facebook_link, category: "extension" },
@@ -474,14 +476,22 @@ export default function SettingsPage() {
                     />
 
                     <Input
+                      label="Default Trial Prompt Credit Quota"
+                      type="number"
+                      value={settings.default_trial_prompts || "1000"}
+                      onChange={(e) => handleChange("default_trial_prompts", e.target.value)}
+                      placeholder="e.g. 50, 100, 500, or 1000"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <Input
                       label="WhatsApp Button Link"
                       value={settings.whatsapp_link || ""}
                       onChange={(e) => handleChange("whatsapp_link", e.target.value)}
                       placeholder="e.g. https://wa.me/919876543210"
                     />
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-6">
                     <Input
                       label="Instagram Button Link"
                       value={settings.instagram_link || ""}
