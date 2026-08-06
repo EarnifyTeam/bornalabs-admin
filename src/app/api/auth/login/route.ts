@@ -102,33 +102,86 @@ export async function POST(request: Request) {
 
     let passwordMatch = false;
 
-    if (user.passwordHash === "NOPASSWORD_SUPABASE_SYNCED" && password === adminDefaultPassword) {
-      const salt = await bcrypt.genSalt(10);
-      const newHash = await bcrypt.hash(password, salt);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { passwordHash: newHash },
-      });
-      passwordMatch = true;
-    } else {
-      // Verify password using bcryptjs
-      passwordMatch = await bcrypt.compare(password, user.passwordHash);
+    if (user && user.passwordHash && user.passwordHash !== "NOPASSWORD_ADMIN_REGISTERED" && user.passwordHash !== "NOPASSWORD_SUPABASE_SYNCED") {
+      try {
+        passwordMatch = await bcrypt.compare(password, user.passwordHash);
+      } catch {
+        passwordMatch = false;
+      }
     }
 
-    // If master admin password was reset, update hash dynamically
+    // Check if master admin credentials match
     if (!passwordMatch && email.toLowerCase().trim() === adminEmail && password === adminDefaultPassword) {
       const salt = await bcrypt.genSalt(10);
       const newHash = await bcrypt.hash(password, salt);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { passwordHash: newHash, role: "SUPER_ADMIN", status: "ACTIVE" },
-      });
+      if (user) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { passwordHash: newHash, role: "SUPER_ADMIN", status: "ACTIVE" },
+        });
+      } else {
+        user = await prisma.user.create({
+          data: {
+            email: adminEmail,
+            passwordHash: newHash,
+            role: "SUPER_ADMIN",
+            status: "ACTIVE",
+            premiumStatus: true,
+            notes: "Auto-provisioned Super Admin Account",
+            profile: {
+              create: {
+                fullName: "BornaLabs Super Admin",
+                country: "India",
+                timezone: "Asia/Kolkata",
+              },
+            },
+          },
+        });
+      }
       passwordMatch = true;
     }
 
+    // Fallback: Verify via Supabase Auth Client if local hash didn't match
     if (!passwordMatch) {
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://iuzdqwgdetxyxyqsfvet.supabase.co";
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (!authError && authData?.user) {
+          passwordMatch = true;
+          const authUser = authData.user;
+          const metadata = authUser.user_metadata || {};
+
+          if (!user) {
+            user = await prisma.user.create({
+              data: {
+                id: authUser.id,
+                email: authUser.email || email,
+                passwordHash: "NOPASSWORD_SUPABASE_SYNCED",
+                role: (metadata.role as any) || "CUSTOMER",
+                status: "ACTIVE",
+                profile: {
+                  create: {
+                    fullName: metadata.full_name || metadata.fullName || authUser.email || email,
+                    country: metadata.country || "Global",
+                    timezone: metadata.timezone || "UTC",
+                  },
+                },
+              },
+            });
+          }
+        }
+      } catch (supabaseErr) {
+        console.warn("Supabase Auth fallback error:", supabaseErr);
+      }
+    }
+
+    if (!passwordMatch || !user) {
       return NextResponse.json(
-        { error: "INVALID_CREDENTIALS" },
+        { error: "INVALID_CREDENTIALS", message: "Invalid email address or password. Please check your credentials." },
         { status: 401, headers: corsHeaders(request.headers.get("origin")) }
       );
     }
@@ -165,20 +218,25 @@ export async function POST(request: Request) {
     });
 
     // Create Audit Log record
-    await prisma.auditLog.create({
-      data: {
-        actorId: user.id,
-        action: "USER_LOGIN_SUCCESS",
-        entityName: "User",
-        entityId: user.id,
-        payload: { email },
-      },
-    });
+    try {
+      await prisma.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: "USER_LOGIN_SUCCESS",
+          entityName: "User",
+          entityId: user.id,
+          payload: { email },
+        },
+      });
+    } catch (auditErr) {
+      console.warn("Failed to create login audit log:", auditErr);
+    }
 
     return response;
   } catch (error: any) {
+    console.error("POST /api/auth/login Error:", error);
     return NextResponse.json(
-      { error: "INTERNAL_SERVER_ERROR" },
+      { error: "INTERNAL_SERVER_ERROR", message: error?.message || "An unexpected error occurred during sign in." },
       { status: 500, headers: corsHeaders(request.headers.get("origin")) }
     );
   }
