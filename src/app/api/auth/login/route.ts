@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     // Query administrative accounts
     let user = await prisma.user.findUnique({
       where: { email },
+      include: { profile: true },
     });
 
     const adminEmail = (process.env.ADMIN_EMAIL || "kumarsuraj0469@gmail.com").toLowerCase().trim();
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
             },
           },
         },
+        include: { profile: true },
       });
     }
 
@@ -115,9 +117,10 @@ export async function POST(request: Request) {
       const salt = await bcrypt.genSalt(10);
       const newHash = await bcrypt.hash(password, salt);
       if (user) {
-        await prisma.user.update({
+        user = await prisma.user.update({
           where: { id: user.id },
           data: { passwordHash: newHash, role: "SUPER_ADMIN", status: "ACTIVE" },
+          include: { profile: true },
         });
       } else {
         user = await prisma.user.create({
@@ -136,6 +139,7 @@ export async function POST(request: Request) {
               },
             },
           },
+          include: { profile: true },
         });
       }
       passwordMatch = true;
@@ -171,6 +175,7 @@ export async function POST(request: Request) {
                   },
                 },
               },
+              include: { profile: true },
             });
           }
         }
@@ -203,6 +208,7 @@ export async function POST(request: Request) {
         id: user.id,
         email: user.email,
         role: user.role,
+        fullName: user.profile?.fullName || user.email.split("@")[0],
       },
     }, { headers: corsHeaders(request.headers.get("origin")) });
 
