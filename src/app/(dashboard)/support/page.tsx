@@ -50,7 +50,7 @@ export default function CustomerSupportPage() {
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/user/support");
+      const res = await fetch("/api/user/support?all=true");
       const data = await res.json();
       if (res.ok) {
         setTickets(data.tickets || []);
