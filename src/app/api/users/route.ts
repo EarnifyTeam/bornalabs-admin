@@ -1,6 +1,82 @@
 import { NextResponse } from "next/server";
 import prisma, { ensureDbSynced } from "@/lib/prisma";
 import { Role, UserStatus } from "@prisma/client";
+import { createAdminClient } from "@/lib/supabase/service";
+
+const mapSupabaseAuthDbUserToAdminRecord = (authUser: any) => {
+  const metadata = authUser.raw_user_meta_data || {};
+  const email = authUser.email || "";
+  const role = (metadata.role as string) || "CUSTOMER";
+  const status = authUser.confirmed_at ? "ACTIVE" : "INACTIVE";
+
+  return {
+    id: authUser.id,
+    email,
+    passwordHash: "",
+    role,
+    status,
+    premiumStatus: false,
+    lastLoginAt: authUser.last_sign_in_at || null,
+    notes: "Registered via Supabase public signup",
+    createdAt: authUser.created_at ? new Date(authUser.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: authUser.updated_at ? new Date(authUser.updated_at).toISOString() : new Date().toISOString(),
+    profile: {
+      fullName: (metadata.full_name as string) || (metadata.fullName as string) || email,
+      phone: authUser.phone || (metadata.phone as string) || null,
+      avatarUrl: null,
+      country: (metadata.country as string) || "Global",
+      timezone: (metadata.timezone as string) || "UTC",
+    },
+    _count: {
+      licenses: 0,
+      downloads: 0,
+    },
+  };
+};
+
+const fetchSupabaseAuthUsersFromDb = async () => {
+  const authUsers = await prisma.$queryRaw<Array<any>>`
+    SELECT id, email, raw_user_meta_data, created_at, updated_at, confirmed_at, last_sign_in_at, phone
+    FROM auth.users
+    WHERE deleted_at IS NULL
+    ORDER BY created_at DESC
+  `;
+
+  return authUsers
+    .map(mapSupabaseAuthDbUserToAdminRecord)
+    .filter((user) => user.email);
+};
+
+const matchesFilters = (user: any, search: string, role?: string, status?: string) => {
+  const lowerSearch = search.toLowerCase();
+  const fullName = user.profile?.fullName?.toLowerCase() || "";
+  const email = user.email?.toLowerCase() || "";
+  const phone = user.profile?.phone?.toLowerCase() || "";
+  const notes = user.notes?.toLowerCase() || "";
+
+  if (search) {
+    const matchesSearch =
+      email.includes(lowerSearch) ||
+      fullName.includes(lowerSearch) ||
+      phone.includes(lowerSearch) ||
+      notes.includes(lowerSearch);
+    if (!matchesSearch) return false;
+  }
+
+  if (role && role !== "ALL") {
+    if (role === "CUSTOMER") {
+      if (user.role !== "CUSTOMER") return false;
+    } else if (user.role !== role) {
+      return false;
+    }
+  }
+
+  if (status && status !== "ALL") {
+    if (user.status !== status) return false;
+  }
+
+  return true;
+};
 
 /**
  * GET: Search, filter (role, status), sort, and paginate users with profile
@@ -45,20 +121,32 @@ export async function GET(request: Request) {
           },
         },
         orderBy: { createdAt: "desc" },
-        skip,
-        take: limit,
       }),
       prisma.user.count({ where }),
     ]);
 
+    const prismaEmails = new Set(users.map((user) => user.email.toLowerCase()));
+
+    const authUsers = await fetchSupabaseAuthUsersFromDb();
+    const supabaseUsers = authUsers
+      .filter((user) => !prismaEmails.has(user.email.toLowerCase()))
+      .filter((user) => matchesFilters(user, search, role, status));
+
+    const combinedUsers = [...users, ...supabaseUsers].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    const pagedUsers = combinedUsers.slice(skip, skip + limit);
+    const combinedTotal = combinedUsers.length;
+
     return NextResponse.json({
       success: true,
-      users,
+      users: pagedUsers,
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+        total: combinedTotal,
+        totalPages: Math.max(1, Math.ceil(combinedTotal / limit)),
       },
     });
   } catch (error: any) {
@@ -104,8 +192,31 @@ export async function POST(request: Request) {
       );
     }
 
+    const supabaseAdmin = createAdminClient();
+    const { data: createdAuthUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      password: "TempPass@123",
+      user_metadata: {
+        full_name: fullName,
+        country,
+        timezone,
+        role: role || "CUSTOMER",
+      },
+    });
+
+    if (authError || !createdAuthUser.user) {
+      console.error("Supabase admin.createUser error:", authError);
+      return NextResponse.json(
+        { error: "SUPABASE_USER_CREATION_FAILED", message: authError?.message || "Unable to create user in Supabase Auth." },
+        { status: 500 }
+      );
+    }
+
+    const authUser = createdAuthUser.user;
     const user = await prisma.user.create({
       data: {
+        id: authUser.id,
         email,
         passwordHash: "NOPASSWORD_ADMIN_REGISTERED",
         role: (role || "CUSTOMER") as Role,

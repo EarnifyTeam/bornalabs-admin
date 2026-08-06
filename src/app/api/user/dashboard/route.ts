@@ -10,9 +10,14 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const userEmail = searchParams.get("userEmail") || searchParams.get("email");
 
     // Fetch primary target user or default to first registered user
     let user = userId ? await prisma.user.findUnique({ where: { id: userId }, include: { profile: true } }) : null;
+
+    if (!user && userEmail) {
+      user = await prisma.user.findUnique({ where: { email: userEmail }, include: { profile: true } });
+    }
 
     if (!user) {
       user = await prisma.user.findFirst({ include: { profile: true } });

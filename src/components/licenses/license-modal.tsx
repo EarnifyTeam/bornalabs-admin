@@ -66,9 +66,16 @@ export function LicenseModal({
     }
   }, [initialData, products, isOpen]);
 
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSave(formData);
+    setSubmitError(null);
+    try {
+      await onSave(formData);
+    } catch (error: any) {
+      setSubmitError(error?.message || "Unable to assign product.");
+    }
   };
 
   if (!isOpen) return null;
@@ -201,6 +208,12 @@ export function LicenseModal({
               className="bg-surface2/40 border border-border rounded-sm p-3 text-foreground focus:outline-none w-full focus:border-border-active transition-all text-xs"
             />
           </div>
+
+          {submitError && (
+            <div className="rounded-sm border border-red p-3 text-red text-[11px] bg-red/10">
+              {submitError}
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end gap-3 border-t border-border pt-4 mt-2">

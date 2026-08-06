@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { LicenseModal, type LicenseFormData } from "@/components/licenses/license-modal";
 import { X, User as UserIcon, Mail, Phone, Globe, Clock, Shield, Key, Smartphone, Calendar, Package } from "lucide-react";
 
 interface UserProfileDrawerProps {
@@ -15,6 +16,10 @@ interface UserProfileDrawerProps {
 export function UserProfileDrawer({ userId, isOpen, onClose }: UserProfileDrawerProps) {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState<Array<{ id: string; name: string; category?: string }>>([]);
+  const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [licenseInitialData, setLicenseInitialData] = useState<LicenseFormData | null>(null);
 
   useEffect(() => {
     if (!userId || !isOpen) return;
@@ -34,10 +39,72 @@ export function UserProfileDrawer({ userId, isOpen, onClose }: UserProfileDrawer
       }
     }
 
+    async function fetchProducts() {
+      try {
+        const res = await fetch("/api/products");
+        const data = await res.json();
+        if (res.ok) {
+          setProducts(data.products || []);
+        }
+      } catch (err) {
+        console.error("Failed to load products for assignment:", err);
+      }
+    }
+
     fetchUserProfile();
+    fetchProducts();
   }, [userId, isOpen]);
 
   if (!isOpen) return null;
+
+  const handleOpenAssignProduct = () => {
+    setLicenseInitialData({
+      productId: products[0]?.id || "",
+      userEmail: userData?.email || "",
+      userId: userData?.id || undefined,
+      type: "TRIAL",
+      customLicenseKey: "",
+      deviceLimit: "1",
+      expiryDays: "30",
+      status: "ACTIVE",
+      notes: "",
+    });
+    setIsLicenseModalOpen(true);
+  };
+
+  const handleSaveLicense = async (formData: LicenseFormData) => {
+    setModalLoading(true);
+    try {
+      const res = await fetch("/api/licenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: formData.productId,
+          userId: formData.userId || userData?.id,
+          userEmail: formData.userEmail || userData?.email,
+          type: formData.type,
+          customLicenseKey: formData.customLicenseKey,
+          deviceLimit: formData.deviceLimit,
+          expiryDays: formData.expiryDays,
+          notes: formData.notes,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to assign product to user.");
+      }
+
+      await fetch(`/api/users/${userData?.id}`);
+      setIsLicenseModalOpen(false);
+      setUserData((prev: any) => ({ ...prev, licenses: [...(prev?.licenses || []), data.license] }));
+    } catch (err) {
+      console.error("Failed to assign product to user:", err);
+      throw err;
+    } finally {
+      setModalLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
@@ -59,6 +126,13 @@ export function UserProfileDrawer({ userId, isOpen, onClose }: UserProfileDrawer
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 mt-4">
+          <div className="text-xs text-muted">Assigned products are managed via license issuance.</div>
+          <Button variant="primary" size="sm" onClick={handleOpenAssignProduct} disabled={!userData || products.length === 0 || modalLoading}>
+            Assign Product
+          </Button>
         </div>
 
         {loading ? (
@@ -141,6 +215,15 @@ export function UserProfileDrawer({ userId, isOpen, onClose }: UserProfileDrawer
           </div>
         ) : null}
       </div>
+
+      <LicenseModal
+        isOpen={isLicenseModalOpen}
+        onClose={() => setIsLicenseModalOpen(false)}
+        onSave={handleSaveLicense}
+        products={products}
+        initialData={licenseInitialData}
+        loading={modalLoading}
+      />
     </div>
   );
 }

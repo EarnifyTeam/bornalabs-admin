@@ -1,5 +1,96 @@
 import { NextResponse } from "next/server";
 import prisma, { ensureDbSynced } from "@/lib/prisma";
+import { Role, UserStatus } from "@prisma/client";
+
+const createPrismaUserFromSupabaseAuth = async (authUser: any) => {
+  const metadata = authUser.raw_user_meta_data || {};
+  const email = authUser.email || "";
+
+  if (!email) return null;
+
+  return prisma.user.create({
+    data: {
+      id: authUser.id,
+      email,
+      passwordHash: "NOPASSWORD_SUPABASE_SYNCED",
+      role: (metadata.role as Role) || Role.CUSTOMER,
+      status: authUser.confirmed_at ? UserStatus.ACTIVE : UserStatus.INACTIVE,
+      premiumStatus: false,
+      notes: "Imported from Supabase Auth",
+      profile: {
+        create: {
+          fullName: (metadata.full_name as string) || email,
+          phone: authUser.phone || (metadata.phone as string) || null,
+          avatarUrl: null,
+          country: (metadata.country as string) || "Global",
+          timezone: (metadata.timezone as string) || "UTC",
+        },
+      },
+    },
+    include: { profile: true },
+  });
+};
+
+const findSupabaseAuthUserById = async (id: string) => {
+  const [authUser] = await prisma.$queryRaw<Array<any>>`
+    SELECT id, email, raw_user_meta_data, created_at, updated_at, confirmed_at, last_sign_in_at, phone
+    FROM auth.users
+    WHERE id = ${id}::uuid AND deleted_at IS NULL
+    LIMIT 1
+  `;
+
+  return authUser || null;
+};
+
+const mapSupabaseAuthUserToDetailRecord = (authUser: any) => {
+  const metadata = authUser.raw_user_meta_data || {};
+  const email = authUser.email || "";
+
+  return {
+    id: authUser.id,
+    email,
+    passwordHash: "NOPASSWORD_SUPABASE_SYNCED",
+    role: (metadata.role as Role) || Role.CUSTOMER,
+    status: authUser.confirmed_at ? UserStatus.ACTIVE : UserStatus.INACTIVE,
+    premiumStatus: false,
+    notes: "Registered via Supabase public signup",
+    lastLoginAt: authUser.last_sign_in_at || null,
+    createdAt: authUser.created_at ? new Date(authUser.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: authUser.updated_at ? new Date(authUser.updated_at).toISOString() : new Date().toISOString(),
+    profile: {
+      fullName: (metadata.full_name as string) || email,
+      phone: authUser.phone || (metadata.phone as string) || null,
+      avatarUrl: null,
+      country: (metadata.country as string) || "Global",
+      timezone: (metadata.timezone as string) || "UTC",
+    },
+  };
+};
+
+const updateSupabaseAuthUser = async (id: string, body: any) => {
+  const metadataUpdates: Record<string, any> = {};
+
+  if (body.fullName !== undefined) metadataUpdates.full_name = body.fullName;
+  if (body.country !== undefined) metadataUpdates.country = body.country;
+  if (body.timezone !== undefined) metadataUpdates.timezone = body.timezone;
+  if (body.role !== undefined) metadataUpdates.role = body.role;
+
+  if (Object.keys(metadataUpdates).length > 0) {
+    await prisma.$executeRaw`
+      UPDATE auth.users
+      SET raw_user_meta_data = raw_user_meta_data || ${metadataUpdates}
+      WHERE id = ${id}::uuid AND deleted_at IS NULL
+    `;
+  }
+
+  if (body.phone !== undefined) {
+    await prisma.$executeRaw`
+      UPDATE auth.users
+      SET phone = ${body.phone}
+      WHERE id = ${id}::uuid AND deleted_at IS NULL
+    `;
+  }
+};
 
 /**
  * GET: Fetch complete single User Profile details including assigned licenses, products & devices
@@ -31,11 +122,16 @@ export async function GET(
       },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: "USER_NOT_FOUND" }, { status: 404 });
+    if (user) {
+      return NextResponse.json({ success: true, user });
     }
 
-    return NextResponse.json({ success: true, user });
+    const authUser = await findSupabaseAuthUserById(params.id);
+    if (authUser) {
+      return NextResponse.json({ success: true, user: mapSupabaseAuthUserToDetailRecord(authUser) });
+    }
+
+    return NextResponse.json({ error: "USER_NOT_FOUND" }, { status: 404 });
   } catch (error: any) {
     return NextResponse.json(
       { error: "INTERNAL_SERVER_ERROR", message: error.message },
@@ -55,8 +151,14 @@ export async function PATCH(
     const body = await request.json();
     const existing = await prisma.user.findUnique({ where: { id: params.id } });
 
+    let user = existing;
+
     if (!existing) {
-      return NextResponse.json({ error: "USER_NOT_FOUND" }, { status: 404 });
+      const authUser = await findSupabaseAuthUserById(params.id);
+      if (!authUser) {
+        return NextResponse.json({ error: "USER_NOT_FOUND" }, { status: 404 });
+      }
+      user = await createPrismaUserFromSupabaseAuth(authUser);
     }
 
     const updatedUser = await prisma.user.update({
@@ -90,6 +192,11 @@ export async function PATCH(
         profile: true,
       },
     });
+
+    const authUser = await findSupabaseAuthUserById(params.id);
+    if (authUser) {
+      await updateSupabaseAuthUser(params.id, body);
+    }
 
     return NextResponse.json({ success: true, user: updatedUser });
   } catch (error: any) {

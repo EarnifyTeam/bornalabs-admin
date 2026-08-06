@@ -194,7 +194,7 @@ export default function LicensesPage() {
       }
     } catch (err) {
       toast.error("Error saving license key.");
-    } flex: {
+    } finally {
       setModalLoading(false);
     }
   };
