@@ -10,15 +10,19 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
-    const userEmail = searchParams.get("userEmail") || searchParams.get("email");
+    const rawEmail = searchParams.get("userEmail") || searchParams.get("email") || "";
+    const cleanUserEmail = rawEmail.trim().toLowerCase();
 
     let user = userId ? await prisma.user.findUnique({ where: { id: userId }, include: { profile: true } }) : null;
 
-    if (!user && userEmail) {
-      user = await prisma.user.findUnique({ where: { email: userEmail }, include: { profile: true } });
+    if (!user && cleanUserEmail) {
+      user = await prisma.user.findFirst({
+        where: { email: { equals: cleanUserEmail, mode: "insensitive" } },
+        include: { profile: true },
+      });
     }
 
-    if (!user) {
+    if (!user && !cleanUserEmail) {
       return NextResponse.json({
         success: true,
         user: null,
@@ -35,9 +39,16 @@ export async function GET(request: Request) {
       });
     }
 
+    const targetUserId = user?.id;
+
     const [licenses, notifications, downloads] = await Promise.all([
       prisma.license.findMany({
-        where: { userId: user.id },
+        where: {
+          OR: [
+            ...(targetUserId ? [{ userId: targetUserId }] : []),
+            ...(cleanUserEmail ? [{ user: { email: { equals: cleanUserEmail, mode: "insensitive" as const } } }] : []),
+          ],
+        },
         include: {
           product: {
             select: { id: true, name: true, category: true, version: true, downloadUrl: true, documentationUrl: true, iconUrl: true },
@@ -52,7 +63,7 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
       }),
       prisma.download.findMany({
-        where: { userId: user.id },
+        where: targetUserId ? { userId: targetUserId } : { id: "non-existent" },
         include: {
           product: { select: { name: true } },
           release: { select: { version: true } },
@@ -74,17 +85,19 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-        fullName: user.profile?.fullName || "Valued Customer",
-        phone: user.profile?.phone || null,
-        country: user.profile?.country || "Global",
-        timezone: user.profile?.timezone || "UTC",
-        avatarUrl: user.profile?.avatarUrl || null,
-      },
+      user: user
+        ? {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            fullName: user.profile?.fullName || "Valued Customer",
+            phone: user.profile?.phone || null,
+            country: user.profile?.country || "Global",
+            timezone: user.profile?.timezone || "UTC",
+            avatarUrl: user.profile?.avatarUrl || null,
+          }
+        : null,
       stats: {
         totalLicenses: licenses.length,
         activeLicenses: activeLicenses.length,

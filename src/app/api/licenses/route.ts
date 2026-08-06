@@ -142,12 +142,16 @@ export async function POST(request: Request) {
 
     // Find or create assigned target user
     let targetUserId = userId;
-    if (!targetUserId && userEmail) {
-      let existingUser = await prisma.user.findUnique({ where: { email: userEmail } });
+    const cleanUserEmail = userEmail ? userEmail.trim().toLowerCase() : "";
+
+    if (!targetUserId && cleanUserEmail) {
+      let existingUser = await prisma.user.findFirst({
+        where: { email: { equals: cleanUserEmail, mode: "insensitive" } },
+      });
       if (!existingUser) {
         existingUser = await prisma.user.create({
           data: {
-            email: userEmail,
+            email: cleanUserEmail,
             passwordHash: "NOPASSWORD_ADMIN_ISSUED",
             role: "CUSTOMER",
             status: "ACTIVE",

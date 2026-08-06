@@ -5,19 +5,27 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
-    const userEmail = searchParams.get("userEmail") || searchParams.get("email");
+    const rawEmail = searchParams.get("userEmail") || searchParams.get("email") || "";
+    const cleanUserEmail = rawEmail.trim().toLowerCase();
 
     let user = userId ? await prisma.user.findUnique({ where: { id: userId } }) : null;
-    if (!user && userEmail) {
-      user = await prisma.user.findUnique({ where: { email: userEmail } });
+    if (!user && cleanUserEmail) {
+      user = await prisma.user.findFirst({
+        where: { email: { equals: cleanUserEmail, mode: "insensitive" } },
+      });
     }
 
-    if (!user) {
+    if (!user && !cleanUserEmail) {
       return NextResponse.json({ success: true, products: [] });
     }
 
     const userLicenses = await prisma.license.findMany({
-      where: { userId: user.id },
+      where: {
+        OR: [
+          ...(user?.id ? [{ userId: user.id }] : []),
+          ...(cleanUserEmail ? [{ user: { email: { equals: cleanUserEmail, mode: "insensitive" as const } } }] : []),
+        ],
+      },
       include: {
         product: true,
       },
