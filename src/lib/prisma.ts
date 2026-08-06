@@ -4,20 +4,17 @@ function getSanitizedDbUrl(): string {
   let url = (process.env.DATABASE_URL || "").trim();
   url = url.replace(/^DATABASE_URL\s*=\s*/i, "").replace(/^["']|["']$/g, "").trim();
 
-  if (!url) {
-    url = "postgresql://postgres:earnifyflow%40admin12345@db.iuzdqwgdetxyxyqsfvet.supabase.co:6543/postgres?pgbouncer=true&connection_limit=1";
+  if (!url || url.includes("db.iuzdqwgdetxyxyqsfvet.supabase.co")) {
+    url = "postgresql://postgres.iuzdqwgdetxyxyqsfvet:earnifyflow%40admin12345@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1";
   }
 
   if (url.includes("@admin12345@")) {
     url = url.replace("earnifyflow@admin12345@", "earnifyflow%40admin12345@");
   }
 
-  if (url.includes("supabase.co")) {
-    url = url.replace(":5432/", ":6543/");
-    if (!url.includes("pgbouncer=true")) {
-      const separator = url.includes("?") ? "&" : "?";
-      url = `${url}${separator}pgbouncer=true&connection_limit=1`;
-    }
+  if (url.includes("pooler.supabase.com") && !url.includes("pgbouncer=true")) {
+    const separator = url.includes("?") ? "&" : "?";
+    url = `${url}${separator}pgbouncer=true&connection_limit=1`;
   }
 
   return url;
