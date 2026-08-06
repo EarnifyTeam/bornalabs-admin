@@ -57,6 +57,10 @@ export async function PATCH(
       }
     }
 
+    if (body.resetDevices) {
+      await prisma.device.deleteMany({ where: { licenseId: params.id } });
+    }
+
     const updated = await prisma.license.update({
       where: { id: params.id },
       data: {
