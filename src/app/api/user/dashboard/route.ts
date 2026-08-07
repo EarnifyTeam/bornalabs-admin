@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const rawEmail = searchParams.get("userEmail") || searchParams.get("email") || "";
     const cleanUserEmail = rawEmail.trim().toLowerCase();
 
-    let user = userId ? await prisma.user.findUnique({ where: { id: userId }, include: { profile: true } }) : null;
+    let user: any = userId ? await prisma.user.findUnique({ where: { id: userId }, include: { profile: true } }) : null;
 
     if (!user && cleanUserEmail) {
       user = await prisma.user.findFirst({
