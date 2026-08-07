@@ -47,17 +47,45 @@ export class SettingService {
   }
 
   /**
-   * Save multiple settings inside a database transaction
+   * Save multiple settings using a single high-performance SQL upsert batch
    */
   static async setMany(settings: { key: string; value: string; category: string }[]) {
-    return await prisma.$transaction(
-      settings.map((s) =>
-        prisma.setting.upsert({
-          where: { key: s.key },
-          update: { value: s.value, category: s.category },
-          create: { key: s.key, value: s.value, category: s.category },
-        })
-      )
-    );
+    if (!settings || settings.length === 0) return;
+
+    // Filter out invalid items
+    const validSettings = settings.filter((s) => s.key);
+    if (validSettings.length === 0) return;
+
+    // Build ultra-fast single multi-row SQL upsert
+    const valueTuples = validSettings.map((s, idx) => {
+      const safeKey = s.key.replace(/'/g, "''");
+      const safeVal = (s.value || "").replace(/'/g, "''");
+      const safeCat = (s.category || "GENERAL").replace(/'/g, "''");
+      return `('${safeKey}', '${safeVal}', '${safeCat}')`;
+    }).join(", ");
+
+    const sql = `
+      INSERT INTO "Setting" ("key", "value", "category")
+      VALUES ${valueTuples}
+      ON CONFLICT ("key")
+      DO UPDATE SET
+        "value" = EXCLUDED."value",
+        "category" = EXCLUDED."category";
+    `;
+
+    try {
+      await prisma.$executeRawUnsafe(sql);
+    } catch (err) {
+      // Fallback to transaction if raw SQL batch fails
+      await prisma.$transaction(
+        validSettings.map((s) =>
+          prisma.setting.upsert({
+            where: { key: s.key },
+            update: { value: s.value, category: s.category },
+            create: { key: s.key, value: s.value, category: s.category },
+          })
+        )
+      );
+    }
   }
 }
