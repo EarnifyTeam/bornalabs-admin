@@ -35,16 +35,36 @@ const mapSupabaseAuthDbUserToAdminRecord = (authUser: any) => {
 };
 
 const fetchSupabaseAuthUsersFromDb = async () => {
-  const authUsers = await prisma.$queryRaw<Array<any>>`
-    SELECT id, email, raw_user_meta_data, created_at, updated_at, confirmed_at, last_sign_in_at, phone
-    FROM auth.users
-    WHERE deleted_at IS NULL
-    ORDER BY created_at DESC
-  `;
+  try {
+    const authUsers = await prisma.$queryRaw<Array<any>>`
+      SELECT id, email, raw_user_meta_data, created_at, updated_at, confirmed_at, last_sign_in_at, phone
+      FROM auth.users
+      WHERE deleted_at IS NULL
+      ORDER BY created_at DESC
+    `;
 
-  return authUsers
-    .map(mapSupabaseAuthDbUserToAdminRecord)
-    .filter((user) => user.email);
+    if (authUsers && authUsers.length > 0) {
+      return authUsers
+        .map(mapSupabaseAuthDbUserToAdminRecord)
+        .filter((user) => user.email);
+    }
+  } catch (err) {
+    // Fallback to Supabase Admin API client if raw DB query fails
+  }
+
+  try {
+    const supabaseAdmin = createAdminClient();
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers();
+    if (!error && data?.users) {
+      return data.users
+        .map(mapSupabaseAuthDbUserToAdminRecord)
+        .filter((user) => user.email);
+    }
+  } catch (err) {
+    // Ignore fallback errors
+  }
+
+  return [];
 };
 
 const matchesFilters = (user: any, search: string, role?: string | null, status?: string | null) => {

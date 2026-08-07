@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { ensureDbSynced } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: Request) {
   try {
+    await ensureDbSynced();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
     const rawEmail = searchParams.get("userEmail") || searchParams.get("email") || "";
@@ -20,33 +21,41 @@ export async function GET(request: Request) {
         where: { email: { equals: cleanUserEmail, mode: "insensitive" } },
         include: { profile: true },
       });
-    }
 
-    if (!user && !cleanUserEmail) {
-      return NextResponse.json({
-        success: true,
-        user: null,
-        stats: {
-          totalLicenses: 0,
-          activeLicenses: 0,
-          assignedProductsCount: 0,
-          totalDownloadsCount: 0,
-        },
-        products: [],
-        licenses: [],
-        notifications: [],
-        recentDownloads: [],
-      });
+      // Auto-create Prisma user profile if user registered in Supabase Auth but not in Prisma yet
+      if (!user) {
+        try {
+          user = await prisma.user.create({
+            data: {
+              email: cleanUserEmail,
+              role: "CUSTOMER",
+              status: "ACTIVE",
+              profile: {
+                create: {
+                  fullName: cleanUserEmail.split("@")[0],
+                  country: "Global",
+                  timezone: "UTC",
+                },
+              },
+            },
+            include: { profile: true },
+          });
+        } catch (e) {
+          // Fallback if create fails
+        }
+      }
     }
 
     const targetUserId = user?.id;
 
+    // Fetch licenses by userId, email relation, or direct notes/email search
     const [licenses, notifications, downloads] = await Promise.all([
       prisma.license.findMany({
         where: {
           OR: [
             ...(targetUserId ? [{ userId: targetUserId }] : []),
             ...(cleanUserEmail ? [{ user: { email: { equals: cleanUserEmail, mode: "insensitive" as const } } }] : []),
+            ...(cleanUserEmail ? [{ notes: { contains: cleanUserEmail, mode: "insensitive" as const } }] : []),
           ],
         },
         include: {
@@ -81,7 +90,7 @@ export async function GET(request: Request) {
       }
     });
 
-    const activeLicenses = licenses.filter((l) => l.status === "ACTIVE");
+    const activeLicenses = licenses.filter((l) => l.status === "ACTIVE" || l.status === "TRIAL");
 
     return NextResponse.json({
       success: true,
@@ -91,13 +100,19 @@ export async function GET(request: Request) {
             email: user.email,
             role: user.role,
             status: user.status,
-            fullName: user.profile?.fullName || "Valued Customer",
+            fullName: user.profile?.fullName || user.email.split("@")[0],
             phone: user.profile?.phone || null,
             country: user.profile?.country || "Global",
             timezone: user.profile?.timezone || "UTC",
             avatarUrl: user.profile?.avatarUrl || null,
           }
-        : null,
+        : {
+            id: targetUserId || "guest",
+            email: cleanUserEmail || "Guest User",
+            role: "CUSTOMER",
+            status: "ACTIVE",
+            fullName: cleanUserEmail ? cleanUserEmail.split("@")[0] : "Customer",
+          },
       stats: {
         totalLicenses: licenses.length,
         activeLicenses: activeLicenses.length,
