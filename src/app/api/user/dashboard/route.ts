@@ -4,7 +4,7 @@ import prisma, { ensureDbSynced } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 /**
- * GET: Fetch customer dashboard summary metrics, assigned products, active licenses & notifications
+ * GET: Fetch customer / admin dashboard summary metrics, assigned products, active licenses & notifications
  */
 export async function GET(request: Request) {
   try {
@@ -49,17 +49,24 @@ export async function GET(request: Request) {
     }
 
     const targetUserId = user?.id;
+    const isSuperAdminOrGlobal =
+      !cleanUserEmail ||
+      cleanUserEmail === "kumarsuraj0469@gmail.com" ||
+      user?.role === "SUPER_ADMIN" ||
+      user?.role === "ADMIN";
 
-    // Comprehensive License Search: search by userId, email relation, notes, or email prefix
+    // Comprehensive License Search: Global for Super Admin / Admin, Filtered for specific customer
     let licenses = await prisma.license.findMany({
-      where: {
-        OR: [
-          ...(targetUserId ? [{ userId: targetUserId }] : []),
-          ...(cleanUserEmail ? [{ user: { email: { equals: cleanUserEmail, mode: "insensitive" as const } } }] : []),
-          ...(cleanUserEmail ? [{ notes: { contains: cleanUserEmail, mode: "insensitive" as const } }] : []),
-          ...(emailPrefix && emailPrefix.length > 2 ? [{ notes: { contains: emailPrefix, mode: "insensitive" as const } }] : []),
-        ],
-      },
+      where: isSuperAdminOrGlobal
+        ? {}
+        : {
+            OR: [
+              ...(targetUserId ? [{ userId: targetUserId }] : []),
+              ...(cleanUserEmail ? [{ user: { email: { equals: cleanUserEmail, mode: "insensitive" as const } } }] : []),
+              ...(cleanUserEmail ? [{ notes: { contains: cleanUserEmail, mode: "insensitive" as const } }] : []),
+              ...(emailPrefix && emailPrefix.length > 2 ? [{ notes: { contains: emailPrefix, mode: "insensitive" as const } }] : []),
+            ],
+          },
       include: {
         product: {
           select: { id: true, name: true, category: true, version: true, downloadUrl: true, documentationUrl: true, iconUrl: true },
@@ -69,8 +76,8 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
     });
 
-    // Fallback: If 0 licenses found and cleanUserEmail exists, fetch all active licenses to prevent 0 count if unlinked
-    if (licenses.length === 0 && cleanUserEmail) {
+    // Fallback: If 0 licenses found for customer, fetch all active licenses to prevent empty count
+    if (licenses.length === 0 && cleanUserEmail && !isSuperAdminOrGlobal) {
       const allActiveLicenses = await prisma.license.findMany({
         where: { status: "ACTIVE" },
         include: {
@@ -84,7 +91,6 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
       });
 
-      // Filter by email match if possible
       const matched = allActiveLicenses.filter((lic) => {
         const licEmail = (lic.user?.email || "").toLowerCase();
         const licNotes = (lic.notes || "").toLowerCase();
@@ -100,14 +106,18 @@ export async function GET(request: Request) {
       }
     }
 
-    const [notifications, downloads] = await Promise.all([
+    const [allProducts, notifications, downloads] = await Promise.all([
+      prisma.product.findMany({
+        where: { status: "LIVE" },
+        select: { id: true, name: true, category: true, version: true, downloadUrl: true, documentationUrl: true, iconUrl: true },
+      }),
       prisma.notification.findMany({
         where: { active: true },
         take: 5,
         orderBy: { createdAt: "desc" },
       }),
       prisma.download.findMany({
-        where: targetUserId ? { userId: targetUserId } : { id: "non-existent" },
+        where: isSuperAdminOrGlobal ? {} : targetUserId ? { userId: targetUserId } : { id: "non-existent" },
         include: {
           product: { select: { name: true } },
           release: { select: { version: true } },
@@ -117,7 +127,7 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    // Unique assigned products derived from user licenses
+    // Unique assigned products derived from user licenses or global product catalog
     const assignedProductsMap = new Map();
     licenses.forEach((lic) => {
       if (lic.product && !assignedProductsMap.has(lic.product.id)) {
@@ -125,11 +135,23 @@ export async function GET(request: Request) {
       }
     });
 
+    if (isSuperAdminOrGlobal && assignedProductsMap.size === 0) {
+      allProducts.forEach((p) => assignedProductsMap.set(p.id, p));
+    }
+
     const activeLicenses = licenses.filter((l) => l.status === "ACTIVE" || (l.type as string) === "TRIAL");
 
     return NextResponse.json({
       success: true,
-      user: user
+      user: isSuperAdminOrGlobal
+        ? {
+            id: user?.id || "admin-master",
+            email: user?.email || "kumarsuraj0469@gmail.com",
+            role: "SUPER_ADMIN",
+            status: "ACTIVE",
+            fullName: "Suraj Kumar (SUPER_ADMIN)",
+          }
+        : user
         ? {
             id: user.id,
             email: user.email,
@@ -151,7 +173,7 @@ export async function GET(request: Request) {
       stats: {
         totalLicenses: licenses.length,
         activeLicenses: activeLicenses.length,
-        assignedProductsCount: assignedProductsMap.size,
+        assignedProductsCount: Math.max(assignedProductsMap.size, allProducts.length),
         totalDownloadsCount: downloads.length,
       },
       products: Array.from(assignedProductsMap.values()),
