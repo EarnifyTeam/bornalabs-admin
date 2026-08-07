@@ -71,7 +71,24 @@ export default function SettingsPage() {
     stripe_secret_key: "",
     razorpay_key_id: "",
     razorpay_key_secret: "",
+
+    // Live Header Announcement Bar Ticker Settings
+    enable_announcement: "false",
+    announcement_title: "Special Offer",
+    announcement_message: "Welcome to BornaLabs! Check out our new 7-Day Free Trial and Lifetime License deals.",
+    announcement_link: "/products",
   });
+
+  // Secret Activation Code Generator State for Admin
+  const [adminGeneratedCode, setAdminGeneratedCode] = useState<string | null>(null);
+  const [customerEmailForCode, setCustomerEmailForCode] = useState("");
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  const handleGenerateActivationCode = () => {
+    const code = `BL-ACTV-${Math.floor(100000 + Math.random() * 900000)}`;
+    setAdminGeneratedCode(code);
+    setCodeCopied(false);
+  };
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -461,6 +478,114 @@ export default function SettingsPage() {
                       <p className="text-[10px] text-muted">Enables 1-click automatic instant checkout via Stripe or Razorpay.</p>
                     </div>
                   </div>
+                </div>
+
+                {/* Secret Activation Code Generator Box for Manual Payments */}
+                <div className="p-4 rounded-md bg-surface2/60 border border-cyan/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="text-xs font-bold text-cyan font-mono flex items-center gap-1.5">
+                        <span>🔑</span> Admin Manual Payment Activation Code Generator
+                      </h5>
+                      <p className="text-[11px] text-muted">
+                        Generate a Secret Activation Code to give to customers after verifying their UPI/Bank payment screenshot.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerateActivationCode}
+                      className="border-cyan text-cyan hover:bg-cyan/20 text-xs font-bold shrink-0"
+                    >
+                      Generate New Secret Code
+                    </Button>
+                  </div>
+
+                  {adminGeneratedCode && (
+                    <div className="p-3 rounded bg-bg/80 border border-border flex items-center justify-between gap-4 font-mono">
+                      <div>
+                        <span className="text-[10px] text-muted block uppercase">Secret Activation Code for Customer</span>
+                        <span className="text-sm font-extrabold text-cyan">{adminGeneratedCode}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(adminGeneratedCode);
+                            setCodeCopied(true);
+                            setTimeout(() => setCodeCopied(false), 2000);
+                          }}
+                          className="px-3 py-1.5 rounded bg-surface2 text-xs font-bold text-white hover:bg-cyan hover:text-black transition-colors"
+                        >
+                          {codeCopied ? "✓ Copied" : "Copy Code"}
+                        </button>
+
+                        <a
+                          href={`https://wa.me/?text=${encodeURIComponent(
+                            `Hello! Your Manual Payment has been verified. Here is your Secret Activation Code: ${adminGeneratedCode}. Go to your Customer Dashboard (My Licenses) and click "Activate Product with Code" to unlock your software.`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 rounded bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-500 transition-colors"
+                        >
+                          Send via WhatsApp
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Live Header Announcement Bar Ticker Box */}
+                <div className="p-4 rounded-md bg-surface2/60 border border-violet/30 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="text-xs font-bold text-violet font-mono flex items-center gap-1.5">
+                        <span>📢</span> Live Top Header Running Announcement Ticker
+                      </h5>
+                      <p className="text-[11px] text-muted">
+                        Publish an auto-running scrolling ticker message on the live website top header bar.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="enable_announcement_toggle"
+                        checked={settings.enable_announcement === "true"}
+                        onChange={(e) => handleChange("enable_announcement", e.target.checked ? "true" : "false")}
+                        className="accent-violet w-5 h-5 rounded cursor-pointer"
+                      />
+                      <label htmlFor="enable_announcement_toggle" className="text-xs font-bold text-white cursor-pointer">
+                        Enable Running Ticker Bar
+                      </label>
+                    </div>
+                  </div>
+
+                  {settings.enable_announcement === "true" && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-border/60">
+                      <Input
+                        label="Announcement Title (e.g. Special Offer / New Release)"
+                        value={settings.announcement_title || ""}
+                        onChange={(e) => handleChange("announcement_title", e.target.value)}
+                        placeholder="Title..."
+                      />
+                      <Input
+                        label="Announcement Message (Auto-scrolling Text)"
+                        value={settings.announcement_message || ""}
+                        onChange={(e) => handleChange("announcement_message", e.target.value)}
+                        placeholder="Full running message..."
+                      />
+                      <Input
+                        label="Target Link (Optional URL / Page)"
+                        value={settings.announcement_link || ""}
+                        onChange={(e) => handleChange("announcement_link", e.target.value)}
+                        placeholder="e.g. /products or /checkout"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Extension Developer & Social Media Links */}
