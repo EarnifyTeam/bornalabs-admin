@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     const userId = searchParams.get("userId");
     const rawEmail = searchParams.get("userEmail") || searchParams.get("email") || "";
     const cleanUserEmail = rawEmail.trim().toLowerCase();
+    const emailPrefix = cleanUserEmail.split("@")[0];
 
     let user: any = userId ? await prisma.user.findUnique({ where: { id: userId }, include: { profile: true } }) : null;
 
@@ -49,24 +50,57 @@ export async function GET(request: Request) {
 
     const targetUserId = user?.id;
 
-    // Fetch licenses by userId, email relation, or direct notes/email search
-    const [licenses, notifications, downloads] = await Promise.all([
-      prisma.license.findMany({
-        where: {
-          OR: [
-            ...(targetUserId ? [{ userId: targetUserId }] : []),
-            ...(cleanUserEmail ? [{ user: { email: { equals: cleanUserEmail, mode: "insensitive" as const } } }] : []),
-            ...(cleanUserEmail ? [{ notes: { contains: cleanUserEmail, mode: "insensitive" as const } }] : []),
-          ],
+    // Comprehensive License Search: search by userId, email relation, notes, or email prefix
+    let licenses = await prisma.license.findMany({
+      where: {
+        OR: [
+          ...(targetUserId ? [{ userId: targetUserId }] : []),
+          ...(cleanUserEmail ? [{ user: { email: { equals: cleanUserEmail, mode: "insensitive" as const } } }] : []),
+          ...(cleanUserEmail ? [{ notes: { contains: cleanUserEmail, mode: "insensitive" as const } }] : []),
+          ...(emailPrefix && emailPrefix.length > 2 ? [{ notes: { contains: emailPrefix, mode: "insensitive" as const } }] : []),
+        ],
+      },
+      include: {
+        product: {
+          select: { id: true, name: true, category: true, version: true, downloadUrl: true, documentationUrl: true, iconUrl: true },
         },
+        devices: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Fallback: If 0 licenses found and cleanUserEmail exists, fetch all active licenses to prevent 0 count if unlinked
+    if (licenses.length === 0 && cleanUserEmail) {
+      const allActiveLicenses = await prisma.license.findMany({
+        where: { status: "ACTIVE" },
         include: {
           product: {
             select: { id: true, name: true, category: true, version: true, downloadUrl: true, documentationUrl: true, iconUrl: true },
           },
           devices: true,
+          user: { select: { id: true, email: true } },
         },
+        take: 20,
         orderBy: { createdAt: "desc" },
-      }),
+      });
+
+      // Filter by email match if possible
+      const matched = allActiveLicenses.filter((lic) => {
+        const licEmail = (lic.user?.email || "").toLowerCase();
+        const licNotes = (lic.notes || "").toLowerCase();
+        return (
+          licEmail.includes(cleanUserEmail) ||
+          licNotes.includes(cleanUserEmail) ||
+          (emailPrefix && (licEmail.includes(emailPrefix) || licNotes.includes(emailPrefix)))
+        );
+      });
+
+      if (matched.length > 0) {
+        licenses = matched;
+      }
+    }
+
+    const [notifications, downloads] = await Promise.all([
       prisma.notification.findMany({
         where: { active: true },
         take: 5,
