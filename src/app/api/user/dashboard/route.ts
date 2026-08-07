@@ -28,6 +28,7 @@ export async function GET(request: Request) {
           user = await prisma.user.create({
             data: {
               email: cleanUserEmail,
+              passwordHash: "",
               role: "CUSTOMER",
               status: "ACTIVE",
               profile: {
@@ -90,7 +91,7 @@ export async function GET(request: Request) {
       }
     });
 
-    const activeLicenses = licenses.filter((l) => l.status === "ACTIVE" || l.status === "TRIAL");
+    const activeLicenses = licenses.filter((l) => l.status === "ACTIVE" || (l.type as string) === "TRIAL");
 
     return NextResponse.json({
       success: true,
